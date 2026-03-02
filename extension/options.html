@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QuantumMail • Key Backup</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 16px; max-width: 720px; }
+      input { width: 100%; padding: 10px; margin: 6px 0 12px; }
+      button { padding: 10px 14px; margin-right: 10px; cursor: pointer; }
+      .row { display: flex; gap: 10px; }
+      .row > div { flex: 1; }
+      .ok { color: #0a7a2f; white-space: pre-wrap; }
+      .err { color: #b00020; white-space: pre-wrap; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h2>QuantumMail • Key Backup</h2>
+    <p class="muted">
+      Extension dependency is preserved: keys never leave the extension in plaintext.
+      Server stores only encrypted ciphertext.
+    </p>
+
+    <div id="status" class="muted">Loading…</div>
+
+    <h3>Passphrase</h3>
+    <div class="row">
+      <div>
+        <label>Passphrase</label>
+        <input id="pw1" type="password" placeholder="Enter a strong passphrase" />
+      </div>
+      <div>
+        <label>Confirm</label>
+        <input id="pw2" type="password" placeholder="Re-enter passphrase" />
+      </div>
+    </div>
+
+    <button id="btnBackup">Backup Key</button>
+    <button id="btnRestore">Restore Key</button>
+    <button id="btnDelete">Delete Backup</button>
+
+    <p id="ok" class="ok"></p>
+    <p id="err" class="err"></p>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
