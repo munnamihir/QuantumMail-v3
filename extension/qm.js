@@ -1,8 +1,13 @@
-// extension/qm.js
+/* =========================================================
+   QuantumMail extension crypto + session helpers
+   - RSA-OAEP: wrap/unwrap DEK
+   - AES-GCM: message + attachment encryption
+   - RSA-PSS: nonce signing (crypto login)
+   - Zero-knowledge key backup (PBKDF2 + AES-GCM)
+========================================================= */
 
 export const DEFAULTS = { serverBase: "", token: "", user: null };
 
-// accept "quantummail.onrender.com" -> "https://quantummail.onrender.com"
 export function normalizeBase(url) {
   let s = String(url || "").trim();
   if (s && !/^https?:\/\//i.test(s)) s = "https://" + s;
@@ -10,14 +15,10 @@ export function normalizeBase(url) {
 }
 
 export async function getSession() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(DEFAULTS, (v) => resolve(v || DEFAULTS));
-  });
+  return new Promise((resolve) => chrome.storage.sync.get(DEFAULTS, (v) => resolve(v || DEFAULTS)));
 }
 export async function setSession(patch) {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set(patch, () => resolve());
-  });
+  return new Promise((resolve) => chrome.storage.sync.set(patch, () => resolve()));
 }
 export async function clearSession() {
   return setSession({ ...DEFAULTS });
@@ -45,7 +46,7 @@ export function b64UrlToBytes(b64url) {
 }
 
 /* =========================================================
-   RSA keypairs PER USER (local)
+   Storage keys
 ========================================================= */
 function rsaStorageKey(userId) {
   const id = String(userId || "").trim();
@@ -53,6 +54,9 @@ function rsaStorageKey(userId) {
   return `qm_rsa_${id}`;
 }
 
+/* =========================================================
+   Keypair: store BOTH OAEP and PSS usage in one keypair
+========================================================= */
 export async function getOrCreateRsaKeypair(userId) {
   const key = rsaStorageKey(userId);
   if (!key) throw new Error("Missing userId for RSA keypair.");
@@ -62,21 +66,37 @@ export async function getOrCreateRsaKeypair(userId) {
   });
 
   if (existing?.privateJwk && existing?.publicJwk) {
-    const privateKey = await crypto.subtle.importKey(
+    const privateKeyOAEP = await crypto.subtle.importKey(
       "jwk",
       existing.privateJwk,
       { name: "RSA-OAEP", hash: "SHA-256" },
       true,
       ["decrypt"]
     );
-    const publicKey = await crypto.subtle.importKey(
+    const publicKeyOAEP = await crypto.subtle.importKey(
       "jwk",
       existing.publicJwk,
       { name: "RSA-OAEP", hash: "SHA-256" },
       true,
       ["encrypt"]
     );
-    return { privateKey, publicKey };
+
+    const privateKeyPSS = await crypto.subtle.importKey(
+      "jwk",
+      existing.privateJwk,
+      { name: "RSA-PSS", hash: "SHA-256" },
+      true,
+      ["sign"]
+    );
+    const publicKeyPSS = await crypto.subtle.importKey(
+      "jwk",
+      existing.publicJwk,
+      { name: "RSA-PSS", hash: "SHA-256" },
+      true,
+      ["verify"]
+    );
+
+    return { privateKeyOAEP, publicKeyOAEP, privateKeyPSS, publicKeyPSS };
   }
 
   const kp = await crypto.subtle.generateKey(
@@ -90,6 +110,7 @@ export async function getOrCreateRsaKeypair(userId) {
     ["encrypt", "decrypt"]
   );
 
+  // export/import as JWK so we can also use RSA-PSS on same material
   const privateJwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
   const publicJwk = await crypto.subtle.exportKey("jwk", kp.publicKey);
 
@@ -100,94 +121,100 @@ export async function getOrCreateRsaKeypair(userId) {
     );
   });
 
-  return { privateKey: kp.privateKey, publicKey: kp.publicKey };
+  const privateKeyPSS = await crypto.subtle.importKey("jwk", privateJwk, { name: "RSA-PSS", hash: "SHA-256" }, true, ["sign"]);
+  const publicKeyPSS = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-PSS", hash: "SHA-256" }, true, ["verify"]);
+
+  return { privateKeyOAEP: kp.privateKey, publicKeyOAEP: kp.publicKey, privateKeyPSS, publicKeyPSS };
 }
 
-export async function exportPublicSpkiB64(publicKey) {
-  const spki = await crypto.subtle.exportKey("spki", publicKey);
+export async function exportPublicSpkiB64(publicKeyOAEP) {
+  const spki = await crypto.subtle.exportKey("spki", publicKeyOAEP);
   return bytesToB64(new Uint8Array(spki));
 }
-
 export async function importPublicSpkiB64(publicKeySpkiB64) {
   const spkiBytes = b64ToBytes(publicKeySpkiB64);
-  return crypto.subtle.importKey(
-    "spki",
-    spkiBytes,
-    { name: "RSA-OAEP", hash: "SHA-256" },
-    true,
-    ["encrypt"]
-  );
+  return crypto.subtle.importKey("spki", spkiBytes, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
 }
 
 /* =========================================================
-   AES-GCM helpers (message encryption)
+   AES-GCM (message)
 ========================================================= */
-export async function aesEncrypt(plaintext) {
+export async function aesEncrypt(plaintext, aad = "web") {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
-    "encrypt",
-    "decrypt",
-  ]);
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   const enc = new TextEncoder().encode(String(plaintext || ""));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(aad) }, key, enc);
   const rawKey = await crypto.subtle.exportKey("raw", key);
   return {
-    ivB64: bytesToB64(iv),
-    ciphertextB64: bytesToB64(new Uint8Array(ct)),
-    dekRawB64: bytesToB64(new Uint8Array(rawKey)),
+    ivB64Url: bytesToB64Url(iv),
+    ctB64Url: bytesToB64Url(new Uint8Array(ct)),
+    rawDek: new Uint8Array(rawKey),
   };
 }
 
-export async function aesDecrypt(ivB64, ciphertextB64, dekRawB64) {
-  const iv = b64ToBytes(ivB64);
-  const ct = b64ToBytes(ciphertextB64);
-  const rawKey = b64ToBytes(dekRawB64);
-  const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["decrypt"]);
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+export async function aesDecrypt(ivB64Url, ctB64Url, aad = "web", rawDekBytes) {
+  const iv = b64UrlToBytes(ivB64Url);
+  const ct = b64UrlToBytes(ctB64Url);
+  const key = await crypto.subtle.importKey("raw", rawDekBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(aad) }, key, ct);
   return new TextDecoder().decode(pt);
 }
 
 /* =========================================================
-   RSA wrap/unwarp DEK
+   RSA wrap/unwarp DEK (OAEP)
 ========================================================= */
-export async function rsaWrapDek(publicKey, dekRawB64) {
-  const dekRaw = b64ToBytes(dekRawB64);
-  const wrapped = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, dekRaw);
-  return bytesToB64(new Uint8Array(wrapped));
+export async function rsaWrapDek(publicKeyOAEP, rawDekBytes) {
+  const wrapped = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKeyOAEP, rawDekBytes);
+  return bytesToB64Url(new Uint8Array(wrapped));
 }
-
-export async function rsaUnwrapDek(privateKey, wrappedDekB64) {
-  const wrapped = b64ToBytes(wrappedDekB64);
-  const dekRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, privateKey, wrapped);
-  return bytesToB64(new Uint8Array(dekRaw));
+export async function rsaUnwrapDek(privateKeyOAEP, wrappedDekB64Url) {
+  const wrappedBytes = b64UrlToBytes(wrappedDekB64Url);
+  const raw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, privateKeyOAEP, wrappedBytes);
+  return new Uint8Array(raw);
 }
 
 /* =========================================================
-   Public key registration (existing idea)
+   RSA-PSS nonce signing (crypto login)
 ========================================================= */
-export async function ensureKeypairAndRegister({ serverBase, token, user }) {
-  if (!serverBase || !token || !user?.id) throw new Error("Missing session/user for key registration.");
+export async function signNonceB64(privateKeyPSS, nonceB64) {
+  const nonce = b64ToBytes(nonceB64);
+  const sig = await crypto.subtle.sign({ name: "RSA-PSS", saltLength: 32 }, privateKeyPSS, nonce);
+  return bytesToB64(new Uint8Array(sig));
+}
 
-  const { privateKey, publicKey } = await getOrCreateRsaKeypair(user.id);
-  const publicKeySpkiB64 = await exportPublicSpkiB64(publicKey);
-
-  const base = normalizeBase(serverBase);
-  const res = await fetch(`${base}/org/register-key`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ publicKeySpkiB64 }),
+/* =========================================================
+   API helper
+========================================================= */
+export async function apiJson(base, path, { method = "GET", token = "", body = null } = {}) {
+  const res = await fetch(`${base}${path}`, {
+    method,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || `Key register failed (${res.status})`);
-
-  return { privateKey, publicKey };
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
 }
 
 /* =========================================================
-   NEW: Zero-knowledge key backup + restore
+   Public key registration (your existing flow)
 ========================================================= */
+export async function ensureKeypairAndRegister(base, token, userId) {
+  const { publicKeyOAEP } = await getOrCreateRsaKeypair(userId);
+  const publicKeySpkiB64 = await exportPublicSpkiB64(publicKeyOAEP);
+  await apiJson(base, "/org/register-key", {
+    method: "POST",
+    token,
+    body: { publicKeySpkiB64 },
+  });
+}
 
-// PBKDF2(passphrase, salt) -> AES-GCM key
+/* =========================================================
+   Zero-knowledge key backup (PBKDF2 + AES-GCM)
+========================================================= */
 async function deriveAesKeyFromPassphrase(passphrase, saltBytes, iterations = 250000) {
   const passBytes = new TextEncoder().encode(String(passphrase || ""));
   const baseKey = await crypto.subtle.importKey("raw", passBytes, "PBKDF2", false, ["deriveKey"]);
@@ -203,13 +230,12 @@ async function deriveAesKeyFromPassphrase(passphrase, saltBytes, iterations = 25
 export async function createEncryptedKeyBackup(userId, passphrase) {
   const key = rsaStorageKey(userId);
   if (!key) throw new Error("Missing userId");
-
   const existing = await new Promise((resolve) => {
     chrome.storage.local.get({ [key]: null }, (v) => resolve(v[key]));
   });
   if (!existing?.privateJwk) throw new Error("No private key found locally to backup.");
 
-  const payloadJson = JSON.stringify({ privateJwk: existing.privateJwk });
+  const payloadJson = JSON.stringify({ privateJwk: existing.privateJwk, publicJwk: existing.publicJwk || null });
 
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -247,18 +273,12 @@ export async function restoreKeyFromBackup(userId, passphrase, keyBackup) {
 
   if (!obj?.privateJwk) throw new Error("Backup did not contain privateJwk");
 
-  // Need public key too — regenerate public from private by importing and exporting public is not possible for RSA-OAEP.
-  // So we keep existing publicJwk if present, else you’ll re-register by generating a new pair.
-  const existing = await new Promise((resolve) => {
-    chrome.storage.local.get({ [key]: null }, (v) => resolve(v[key]));
-  });
-
   await new Promise((resolve) => {
     chrome.storage.local.set(
       {
         [key]: {
           privateJwk: obj.privateJwk,
-          publicJwk: existing?.publicJwk || null,
+          publicJwk: obj.publicJwk || null,
           restoredAt: new Date().toISOString(),
         },
       },
