@@ -1,9 +1,14 @@
 // extension/content.js
-// Gmail-safe selection caching (polling) + replace selection with link + decrypt bridge
+// Gmail-safe selection caching (polling) + replace selection with link
+// + portal decrypt bridge (/m/:id) + generic portal<->extension postMessage bridge
 
 let cachedSelectionText = "";
 let cachedRange = null;
 let lastActiveCompose = null;
+
+/* -----------------------------
+   Selection caching helpers
+------------------------------ */
 
 function cloneRangeIfPossible(sel) {
   try {
@@ -24,7 +29,9 @@ function cacheSelectionNow() {
 
     const r = cloneRangeIfPossible(sel);
     if (r && text) cachedRange = r;
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 // Track last focused compose editor
@@ -45,7 +52,7 @@ document.addEventListener("mouseup", cacheSelectionNow, true);
 document.addEventListener("keyup", cacheSelectionNow, true);
 document.addEventListener("selectionchange", cacheSelectionNow, true);
 
-// ✅ Polling cache (most reliable for Gmail + popup focus loss)
+// Polling cache (most reliable for Gmail + popup focus loss)
 setInterval(() => {
   cacheSelectionNow();
 }, 250);
@@ -55,7 +62,9 @@ function getSelectionTextRobust() {
   try {
     const live = String(window.getSelection?.()?.toString() || "").trim();
     if (live) return live;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   // 2) cached selection
   if (cachedSelectionText) return cachedSelectionText;
@@ -69,7 +78,9 @@ function replaceUsingCachedRange(link) {
     if (!cachedRange) return false;
 
     const common = cachedRange.commonAncestorContainer;
-    const containerEl = common?.nodeType === Node.ELEMENT_NODE ? common : common?.parentElement;
+    const containerEl =
+      common?.nodeType === Node.ELEMENT_NODE ? common : common?.parentElement;
+
     if (!containerEl || !document.contains(containerEl)) return false;
 
     // ensure in contenteditable tree
@@ -86,8 +97,8 @@ function replaceUsingCachedRange(link) {
 
     cachedRange.deleteContents();
     cachedRange.insertNode(document.createTextNode(link));
-
     cachedRange.collapse(false);
+
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(cachedRange);
@@ -95,6 +106,7 @@ function replaceUsingCachedRange(link) {
     // clear caches
     cachedSelectionText = "";
     cachedRange = null;
+
     return true;
   } catch {
     return false;
@@ -104,7 +116,6 @@ function replaceUsingCachedRange(link) {
 // Replace using execCommand (works if selection still active)
 function replaceUsingExecCommand(link) {
   try {
-    // If selection is active, this overwrites it
     const ok = document.execCommand("insertText", false, link);
     if (ok) {
       cachedSelectionText = "";
@@ -120,11 +131,14 @@ function replaceUsingExecCommand(link) {
 function insertFallback(link) {
   try {
     const editor =
-      (document.activeElement && document.activeElement.isContentEditable && document.activeElement) ||
+      (document.activeElement &&
+        document.activeElement.isContentEditable &&
+        document.activeElement) ||
       lastActiveCompose ||
       document.querySelector('[role="textbox"][contenteditable="true"]');
 
     if (!editor) return false;
+
     editor.focus();
     document.execCommand("insertText", false, link);
     return true;
@@ -132,6 +146,10 @@ function insertFallback(link) {
     return false;
   }
 }
+
+/* -----------------------------
+   Extension runtime messages
+------------------------------ */
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -156,17 +174,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (insertFallback(url)) {
           return sendResponse({
             ok: true,
-            warning: "Inserted link, but could not replace selection. Re-select and try again for exact replace."
+            warning:
+              "Inserted link, but could not replace selection.\nRe-select and try again for exact replace.",
           });
         }
 
         return sendResponse({
           ok: false,
-          error: "Select text in the email body first (compose body)."
+          error: "Select text in the email body first (compose body).",
         });
       }
 
-      if (msg?.type === "QM_PING") {
+      if (msg?.type === "QM_PING" || msg?.type === "QM_PING_FROM_PORTAL") {
         sendResponse({ ok: true });
         return;
       }
@@ -180,9 +199,47 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
-// -----------------------
-// Decrypt bridge for /m/<id>
-// -----------------------
+/* =========================================================
+   Portal ↔ Extension bridges
+========================================================= */
+
+/**
+ * Generic bridge for any portal page:
+ * Portal -> window.postMessage({ source:"QM_PORTAL", msg:{...} }, "*")
+ * Extension -> window.postMessage({ source:"QM_EXTENSION_REPLY", payload:<runtimeResponse> }, "*")
+ *
+ * This works on any page matched by your content_scripts, including your onrender domain.
+ */
+window.addEventListener("message", (ev) => {
+  try {
+    const data = ev?.data;
+    if (!data || data.source !== "QM_PORTAL") return;
+
+    const msg = data.msg;
+    if (!msg || typeof msg !== "object") return;
+
+    chrome.runtime.sendMessage(msg, (resp) => {
+      window.postMessage(
+        { source: "QM_EXTENSION_REPLY", payload: resp },
+        "*"
+      );
+    });
+  } catch {
+    // ignore
+  }
+});
+
+/**
+ * Backward-compatible decrypt bridge for /m/:id pages
+ * Your current portal uses:
+ *  source: "quantummail-portal"
+ *  type: "QM_LOGIN_AND_DECRYPT_REQUEST"
+ * and expects:
+ *  source: "quantummail-extension"
+ *  type: "QM_DECRYPT_RESULT"
+ *
+ * We keep it exactly.
+ */
 function getMsgIdFromPath() {
   const parts = location.pathname.split("/").filter(Boolean);
   if (parts[0] === "m" && parts[1]) return parts[1];
@@ -193,39 +250,80 @@ if (location.pathname.startsWith("/m/")) {
   window.addEventListener("message", (event) => {
     const data = event.data || {};
     if (data?.source !== "quantummail-portal") return;
-    if (data?.type !== "QM_LOGIN_AND_DECRYPT_REQUEST") return;
 
-    const msgId = data.msgId || getMsgIdFromPath();
+    // Existing flow (password-based)
+    if (data?.type === "QM_LOGIN_AND_DECRYPT_REQUEST") {
+      const msgId = data.msgId || getMsgIdFromPath();
 
-    // inside your existing "/m/" bridge callback:
-    chrome.runtime.sendMessage(
-      {
-        type: "QM_LOGIN_AND_DECRYPT",
-        msgId,
-        serverBase: data.serverBase,
-        orgId: data.orgId,
-        username: data.username,
-        password: data.password
-      },
-      (resp) => {
-        const out = resp?.ok
-          ? {
-              source: "quantummail-extension",
-              type: "QM_DECRYPT_RESULT",
-              ok: true,
-              plaintext: resp.plaintext,
-              attachments: resp.attachments || [],
-              message: "Decrypted ✅ (access audited)"
-            }
-          : {
-              source: "quantummail-extension",
-              type: "QM_DECRYPT_RESULT",
-              ok: false,
-              error: resp?.error || "Decrypt failed"
-            };
-    
-        window.postMessage(out, "*");
-      }
-    );
+      chrome.runtime.sendMessage(
+        {
+          type: "QM_LOGIN_AND_DECRYPT",
+          msgId,
+          serverBase: data.serverBase,
+          orgId: data.orgId,
+          username: data.username,
+          password: data.password,
+        },
+        (resp) => {
+          const out = resp?.ok
+            ? {
+                source: "quantummail-extension",
+                type: "QM_DECRYPT_RESULT",
+                ok: true,
+                plaintext: resp.plaintext,
+                attachments: resp.attachments || [],
+                message: "Decrypted ✅ (access audited)",
+              }
+            : {
+                source: "quantummail-extension",
+                type: "QM_DECRYPT_RESULT",
+                ok: false,
+                error: resp?.error || "Decrypt failed",
+              };
+
+          window.postMessage(out, "*");
+        }
+      );
+
+      return;
+    }
+
+    // Optional future flow (nonce-sign based, no password)
+    // If you implement QM_CHALLENGE_LOGIN_AND_DECRYPT in background.js,
+    // your portal can use this type too.
+    if (data?.type === "QM_CHALLENGE_LOGIN_AND_DECRYPT_REQUEST") {
+      const msgId = data.msgId || getMsgIdFromPath();
+
+      chrome.runtime.sendMessage(
+        {
+          type: "QM_CHALLENGE_LOGIN_AND_DECRYPT",
+          msgId,
+          serverBase: data.serverBase,
+          orgId: data.orgId,
+          username: data.username,
+        },
+        (resp) => {
+          const out = resp?.ok
+            ? {
+                source: "quantummail-extension",
+                type: "QM_DECRYPT_RESULT",
+                ok: true,
+                plaintext: resp.plaintext,
+                attachments: resp.attachments || [],
+                message: "Decrypted ✅ (access audited)",
+              }
+            : {
+                source: "quantummail-extension",
+                type: "QM_DECRYPT_RESULT",
+                ok: false,
+                error: resp?.error || "Decrypt failed",
+              };
+
+          window.postMessage(out, "*");
+        }
+      );
+
+      return;
+    }
   });
 }
