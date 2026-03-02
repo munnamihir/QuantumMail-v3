@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
 import cors from "cors";
-
+import { mountKeyBackupRoutes } from "./keyBackupRoutes.js";
 import { pool } from "./db.js"; // Neon/PG pool
 import { peekOrg, getOrg, saveOrg } from "./orgStore.js"; // JSONB org store
 import { sendMail } from "./mailer.js"; // single source of truth for email sending
@@ -227,6 +227,8 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
+
+mountKeyBackupRoutes(app, requireAuth);
 
 function requireAdmin(req, res, next) {
   if (!req.qm?.user) return res.status(401).json({ error: "Unauthorized" });
