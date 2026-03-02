@@ -1,193 +1,40 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>QuantumMail • Decrypt</title>
-  <style>
-    :root{
-      --bg:#0b0f1a;
-      --card:#12182a;
-      --text:#e9eefc;
-      --muted:#aab4d6;
-      --border:rgba(255,255,255,.10);
-      --accent:#6ea8fe;
-      --good:#2bd576;
-      --bad:#ff5c77;
-      --shadow: 0 18px 60px rgba(0,0,0,.35);
-    }
-    *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      color:var(--text);
-      background:
-        radial-gradient(1200px 600px at 30% -10%, rgba(110,168,254,.18), transparent 55%),
-        radial-gradient(900px 500px at 95% 0%, rgba(43,213,118,.12), transparent 50%),
-        var(--bg);
-    }
-    .container{ max-width: 980px; margin: 0 auto; padding: 22px 16px 46px; }
-    .top{
-      display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
-      margin-bottom: 14px;
-    }
-    .brand{ display:flex; align-items:center; gap:12px; }
-    .logo{
-      width:42px; height:42px; border-radius: 14px;
-      background: linear-gradient(135deg, rgba(110,168,254,.95), rgba(43,213,118,.95));
-      box-shadow: 0 14px 40px rgba(110,168,254,.20);
-      flex: 0 0 auto;
-    }
-    h1{ margin:0; font-size: 18px; letter-spacing:.2px; line-height: 1.1; }
-    .sub{ margin:3px 0 0; font-size: 12px; color: var(--muted); }
-    .pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 8px 10px; border-radius: 999px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color: var(--muted);
-      font-size: 12px;
-      white-space: nowrap;
-      max-width: 480px;
-      overflow:hidden; text-overflow: ellipsis;
-    }
-    .dot{
-      width:8px; height:8px; border-radius:999px;
-      background: rgba(255,255,255,.25);
-      box-shadow: 0 0 0 3px rgba(255,255,255,.06);
-    }
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>QuantumMail • Decrypt</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; padding: 18px; max-width: 920px; margin: 0 auto; }
+      input { width: 100%; padding: 10px; margin: 6px 0 12px; }
+      button { padding: 10px 14px; cursor: pointer; }
+      .muted { color:#666; }
+      .ok { color:#0a7a2f; white-space: pre-wrap; }
+      .err { color:#b00020; white-space: pre-wrap; }
+      pre { background:#f5f5f5; padding:12px; border-radius:12px; overflow:auto; }
+    </style>
+  </head>
+  <body>
+    <h2>QuantumMail • Decrypt</h2>
+    <p class="muted">
+      Decryption requires the QuantumMail Chrome extension to be installed & enabled.
+    </p>
 
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 14px;
-      box-shadow: var(--shadow);
-    }
-    .row{ display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-    .row > div{ flex: 1; min-width: 220px; }
-    label{
-      display:block; font-size: 11px; color: var(--muted);
-      margin: 6px 0 6px; font-weight: 600; letter-spacing: .15px;
-    }
-    input, textarea{
-      width:100%;
-      padding: 10px 11px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      outline: none;
-    }
-    textarea{ min-height: 180px; resize: vertical; }
-    input::placeholder, textarea::placeholder{ color: rgba(170,180,214,.70); }
-    input:focus, textarea:focus{
-      border-color: rgba(110,168,254,.60);
-      box-shadow: 0 0 0 4px rgba(110,168,254,.12);
-    }
+    <div id="extStatus" class="muted">Checking extension…</div>
 
-    .actions{ display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items:center; }
-    button{
-      padding: 10px 12px; border-radius: 12px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      cursor: pointer;
-      font-weight: 800;
-      letter-spacing: .2px;
-    }
-    button.primary{
-      border: none;
-      color: #07101f;
-      background: linear-gradient(135deg, rgba(110,168,254,.95), rgba(43,213,118,.90));
-    }
-    button:hover{ filter: brightness(1.06); }
+    <h3>Org Login (No Password)</h3>
+    <label>Org Id</label>
+    <input id="orgId" placeholder="org_xxx" />
+    <label>Username</label>
+    <input id="username" placeholder="mihir" />
+    <button id="btnDecrypt">Decrypt with Extension</button>
 
-    .ok{ margin-top: 10px; color: var(--good); font-size: 12px; white-space: pre-wrap; }
-    .err{ margin-top: 10px; color: var(--bad); font-size: 12px; white-space: pre-wrap; }
+    <h3>Decrypted Message</h3>
+    <pre id="out">(empty)</pre>
 
-    .attWrap{
-      margin-top: 12px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      background: rgba(255,255,255,.03);
-      padding: 10px;
-    }
-    .attTitle{ font-weight: 800; font-size: 12px; color: rgba(233,238,252,.95); margin-bottom: 8px; }
-    .attItem{ margin: 8px 0; }
-    .attItem a{ color: rgba(110,168,254,.95); text-decoration:none; font-weight: 700; }
-    .mutedSmall{ font-size: 12px; color: var(--muted); line-height: 1.45; }
-    code{
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.08);
-      padding: 2px 6px;
-      border-radius: 8px;
-      color: rgba(233,238,252,.95);
-    }
-  </style>
-</head>
+    <p id="ok" class="ok"></p>
+    <p id="err" class="err"></p>
 
-<body>
-  <div class="container">
-    <div class="top">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>
-          <h1>QuantumMail • Decrypt</h1>
-          <div class="sub">Org-authenticated decryption (audited) + attachments download</div>
-        </div>
-      </div>
-
-      <div class="pill" title="Message ID">
-        <span class="dot"></span>
-        <span>Message: <code id="msgId">-</code></span>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <div>
-          <label for="orgId">Org Id</label>
-          <input id="orgId" placeholder="org_demo" value="org_demo" />
-        </div>
-        <div>
-          <label for="username">Username</label>
-          <input id="username" placeholder="alice" />
-        </div>
-        <div>
-          <label for="password">Password</label>
-          <input id="password" type="password" placeholder="••••••••" />
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="btnDecrypt" class="primary">Login & Decrypt</button>
-        <span class="mutedSmall">Requires the QuantumMail extension (MV3) to be installed & enabled.</span>
-      </div>
-
-      <div id="ok" class="ok"></div>
-      <div id="err" class="err"></div>
-
-      <div class="row">
-        <div style="flex:1; min-width: 100%;">
-          <label for="out">Decrypted Message</label>
-          <textarea id="out" readonly placeholder="Decrypted plaintext will appear here…"></textarea>
-        </div>
-      </div>
-
-      <div id="attachments" class="attWrap" style="display:none;">
-        <div class="attTitle">Attachments</div>
-        <div id="attList"></div>
-      </div>
-
-      <div class="mutedSmall" style="margin-top:12px;">
-        If you see “extension not detected”: install/enable it → refresh this page → try again.
-      </div>
-    </div>
-  </div>
-
-  <!-- IMPORTANT: absolute path so it loads when page URL is /m/<id> -->
-  <script type="module" src="/portal/decrypt.js"></script>
-</body>
+    <script src="decrypt.js"></script>
+  </body>
 </html>
