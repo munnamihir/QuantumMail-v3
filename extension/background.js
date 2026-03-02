@@ -2,15 +2,13 @@
 
 import {
   normalizeBase,
+  apiJson,
   getSession,
   setSession,
-  ensureKeypairAndRegister,
-  aesEncrypt,
-  aesDecrypt,
-  importPublicSpkiB64,
-  rsaWrapDek,
-  b64UrlToBytes,
-  getOrCreateRsaKeypair
+  getOrCreateRsaKeypair,
+  signNonceB64,
+  rsaUnwrapDek,
+  aesDecrypt
 } from "./qm.js";
 
 /* =========================
