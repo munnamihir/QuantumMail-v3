@@ -1,19 +1,11 @@
 // extension/qm.js
 
-export const DEFAULTS = {
-  serverBase: "",
-  token: "",
-  user: null
-};
+export const DEFAULTS = { serverBase: "", token: "", user: null };
 
-// ✅ FIX: accept "quantummail.onrender.com" and turn into "https://quantummail.onrender.com"
+// accept "quantummail.onrender.com" -> "https://quantummail.onrender.com"
 export function normalizeBase(url) {
   let s = String(url || "").trim();
-
-  // add scheme if missing
   if (s && !/^https?:\/\//i.test(s)) s = "https://" + s;
-
-  // strip trailing slashes
   return s.replace(/\/+$/, "");
 }
 
@@ -22,35 +14,30 @@ export async function getSession() {
     chrome.storage.sync.get(DEFAULTS, (v) => resolve(v || DEFAULTS));
   });
 }
-
 export async function setSession(patch) {
   return new Promise((resolve) => {
     chrome.storage.sync.set(patch, () => resolve());
   });
 }
-
 export async function clearSession() {
   return setSession({ ...DEFAULTS });
 }
 
-// ---------- Base64 helpers ----------
+/* ---------- Base64 helpers ---------- */
 export function b64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
 }
-
 export function bytesToB64(bytes) {
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
 }
-
 export function bytesToB64Url(bytes) {
   return bytesToB64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
-
 export function b64UrlToBytes(b64url) {
   let b64 = String(b64url || "").replace(/-/g, "+").replace(/_/g, "/");
   while (b64.length % 4) b64 += "=";
@@ -58,11 +45,8 @@ export function b64UrlToBytes(b64url) {
 }
 
 /* =========================================================
-   ✅ RSA keypairs (PER USER)
-   - fixes OperationError unwrap mismatch
-   - fixes "user B overwrote user A keys"
+   RSA keypairs PER USER (local)
 ========================================================= */
-
 function rsaStorageKey(userId) {
   const id = String(userId || "").trim();
   if (!id) return null;
@@ -100,7 +84,7 @@ export async function getOrCreateRsaKeypair(userId) {
       name: "RSA-OAEP",
       modulusLength: 2048,
       publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256"
+      hash: "SHA-256",
     },
     true,
     ["encrypt", "decrypt"]
@@ -110,7 +94,10 @@ export async function getOrCreateRsaKeypair(userId) {
   const publicJwk = await crypto.subtle.exportKey("jwk", kp.publicKey);
 
   await new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: { privateJwk, publicJwk, createdAt: new Date().toISOString() } }, () => resolve());
+    chrome.storage.local.set(
+      { [key]: { privateJwk, publicJwk, createdAt: new Date().toISOString() } },
+      () => resolve()
+    );
   });
 
   return { privateKey: kp.privateKey, publicKey: kp.publicKey };
@@ -132,94 +119,152 @@ export async function importPublicSpkiB64(publicKeySpkiB64) {
   );
 }
 
-/**
- * ✅ Register the *current user's* public key
- * Pass userId from login response/session.
- */
-export async function ensureKeypairAndRegister(serverBase, token, userId) {
-  if (!userId) throw new Error("ensureKeypairAndRegister: missing userId");
-
-  const { publicKey } = await getOrCreateRsaKeypair(userId);
-  const publicKeySpkiB64 = await exportPublicSpkiB64(publicKey);
-
-  async function tryRegister(path) {
-    const res = await fetch(`${serverBase}${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ publicKeySpkiB64 })
-    });
-
-    const raw = await res.text().catch(() => "");
-    let data = {};
-    try {
-      data = (res.headers.get("content-type") || "").includes("application/json")
-        ? JSON.parse(raw || "{}")
-        : { raw };
-    } catch {
-      data = { raw };
-    }
-
-    return { res, data, raw };
-  }
-
-  let out = await tryRegister("/org/register-key");
-  if (out.res.ok) return;
-
-  out = await tryRegister("/pubkey_register");
-  if (out.res.ok) return;
-
-  throw new Error(out.data?.error || out.data?.message || `pubkey_register failed (${out.res.status})`);
-}
-
-// AES-GCM envelope encryption
-export async function aesEncrypt(plaintext, aadText = "gmail") {
-  const dek = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
-    "encrypt",
-    "decrypt"
-  ]);
-
+/* =========================================================
+   AES-GCM helpers (message encryption)
+========================================================= */
+export async function aesEncrypt(plaintext) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const ptBytes = new TextEncoder().encode(plaintext);
-  const aadBytes = new TextEncoder().encode(aadText);
-
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: aadBytes },
-    dek,
-    ptBytes
-  );
-
-  const rawDek = new Uint8Array(await crypto.subtle.exportKey("raw", dek));
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
+    "encrypt",
+    "decrypt",
+  ]);
+  const enc = new TextEncoder().encode(String(plaintext || ""));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc);
+  const rawKey = await crypto.subtle.exportKey("raw", key);
   return {
-    ivB64Url: bytesToB64Url(iv),
-    ctB64Url: bytesToB64Url(new Uint8Array(ct)),
-    aad: aadText,
-    rawDek
+    ivB64: bytesToB64(iv),
+    ciphertextB64: bytesToB64(new Uint8Array(ct)),
+    dekRawB64: bytesToB64(new Uint8Array(rawKey)),
   };
 }
 
-export async function aesDecrypt(ivB64Url, ctB64Url, aadText, rawDekBytes) {
-  const iv = b64UrlToBytes(ivB64Url);
-  const ct = b64UrlToBytes(ctB64Url);
-  const aadBytes = new TextEncoder().encode(aadText || "");
-
-  const dek = await crypto.subtle.importKey("raw", rawDekBytes, { name: "AES-GCM" }, false, [
-    "decrypt"
-  ]);
-
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, additionalData: aadBytes },
-    dek,
-    ct
-  );
-
+export async function aesDecrypt(ivB64, ciphertextB64, dekRawB64) {
+  const iv = b64ToBytes(ivB64);
+  const ct = b64ToBytes(ciphertextB64);
+  const rawKey = b64ToBytes(dekRawB64);
+  const key = await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
   return new TextDecoder().decode(pt);
 }
 
-export async function rsaWrapDek(recipientPublicKey, rawDekBytes) {
-  const wrapped = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, recipientPublicKey, rawDekBytes);
-  return bytesToB64Url(new Uint8Array(wrapped));
+/* =========================================================
+   RSA wrap/unwarp DEK
+========================================================= */
+export async function rsaWrapDek(publicKey, dekRawB64) {
+  const dekRaw = b64ToBytes(dekRawB64);
+  const wrapped = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, dekRaw);
+  return bytesToB64(new Uint8Array(wrapped));
+}
+
+export async function rsaUnwrapDek(privateKey, wrappedDekB64) {
+  const wrapped = b64ToBytes(wrappedDekB64);
+  const dekRaw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, privateKey, wrapped);
+  return bytesToB64(new Uint8Array(dekRaw));
+}
+
+/* =========================================================
+   Public key registration (existing idea)
+========================================================= */
+export async function ensureKeypairAndRegister({ serverBase, token, user }) {
+  if (!serverBase || !token || !user?.id) throw new Error("Missing session/user for key registration.");
+
+  const { privateKey, publicKey } = await getOrCreateRsaKeypair(user.id);
+  const publicKeySpkiB64 = await exportPublicSpkiB64(publicKey);
+
+  const base = normalizeBase(serverBase);
+  const res = await fetch(`${base}/org/register-key`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ publicKeySpkiB64 }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Key register failed (${res.status})`);
+
+  return { privateKey, publicKey };
+}
+
+/* =========================================================
+   NEW: Zero-knowledge key backup + restore
+========================================================= */
+
+// PBKDF2(passphrase, salt) -> AES-GCM key
+async function deriveAesKeyFromPassphrase(passphrase, saltBytes, iterations = 250000) {
+  const passBytes = new TextEncoder().encode(String(passphrase || ""));
+  const baseKey = await crypto.subtle.importKey("raw", passBytes, "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: saltBytes, iterations, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function createEncryptedKeyBackup(userId, passphrase) {
+  const key = rsaStorageKey(userId);
+  if (!key) throw new Error("Missing userId");
+
+  const existing = await new Promise((resolve) => {
+    chrome.storage.local.get({ [key]: null }, (v) => resolve(v[key]));
+  });
+  if (!existing?.privateJwk) throw new Error("No private key found locally to backup.");
+
+  const payloadJson = JSON.stringify({ privateJwk: existing.privateJwk });
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aesKey = await deriveAesKeyFromPassphrase(passphrase, salt, 250000);
+
+  const pt = new TextEncoder().encode(payloadJson);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, pt);
+
+  return {
+    v: 1,
+    algo: "PBKDF2-SHA256/AES-GCM",
+    saltB64: bytesToB64(salt),
+    ivB64: bytesToB64(iv),
+    ciphertextB64: bytesToB64(new Uint8Array(ct)),
+    kdf: { iterations: 250000 },
+  };
+}
+
+export async function restoreKeyFromBackup(userId, passphrase, keyBackup) {
+  const key = rsaStorageKey(userId);
+  if (!key) throw new Error("Missing userId");
+  if (!keyBackup?.saltB64 || !keyBackup?.ivB64 || !keyBackup?.ciphertextB64) {
+    throw new Error("Invalid backup payload");
+  }
+
+  const salt = b64ToBytes(keyBackup.saltB64);
+  const iv = b64ToBytes(keyBackup.ivB64);
+  const ct = b64ToBytes(keyBackup.ciphertextB64);
+
+  const iterations = keyBackup?.kdf?.iterations || 250000;
+  const aesKey = await deriveAesKeyFromPassphrase(passphrase, salt, iterations);
+
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ct);
+  const obj = JSON.parse(new TextDecoder().decode(pt));
+
+  if (!obj?.privateJwk) throw new Error("Backup did not contain privateJwk");
+
+  // Need public key too — regenerate public from private by importing and exporting public is not possible for RSA-OAEP.
+  // So we keep existing publicJwk if present, else you’ll re-register by generating a new pair.
+  const existing = await new Promise((resolve) => {
+    chrome.storage.local.get({ [key]: null }, (v) => resolve(v[key]));
+  });
+
+  await new Promise((resolve) => {
+    chrome.storage.local.set(
+      {
+        [key]: {
+          privateJwk: obj.privateJwk,
+          publicJwk: existing?.publicJwk || null,
+          restoredAt: new Date().toISOString(),
+        },
+      },
+      () => resolve()
+    );
+  });
+
+  return true;
 }
