@@ -2,41 +2,28 @@ import {
   getSession,
   normalizeBase,
   createEncryptedKeyBackup,
-  restoreKeyFromBackup
+  restoreKeyFromBackup,
+  apiJson
 } from "./qm.js";
 
 const $ = (id) => document.getElementById(id);
 const ok = (m) => (($("ok").textContent = m || ""), ($("err").textContent = ""));
 const err = (m) => (($("err").textContent = m || ""), ($("ok").textContent = ""));
 
-async function api(serverBase, path, token, { method = "GET", body = null } = {}) {
-  const base = normalizeBase(serverBase);
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
-  return data;
-}
-
 async function loadStatus() {
   const s = await getSession();
   const { token, serverBase, user } = s;
 
-  if (!token || !serverBase || !user?.id) {
+  if (!token || !serverBase || !user?.userId) {
     $("status").textContent = "Not logged in in the extension. Login once first.";
     return null;
   }
 
-  const st = await api(serverBase, "/org/key-backup/status", token);
+  const base = normalizeBase(serverBase);
+  const st = await apiJson(base, "/org/key-backup/status", { token });
   $("status").textContent =
     `Logged in as ${user.username}@${user.orgId} • backup: ${st.hasBackup ? "YES" : "NO"}${st.createdAt ? " • " + st.createdAt : ""}`;
-  return { token, serverBase, user };
+  return { token, base, user };
 }
 
 function requireBackupPassphrase() {
@@ -54,8 +41,9 @@ $("btnBackup").addEventListener("click", async () => {
     if (!ctx) return;
 
     const passphrase = requireBackupPassphrase();
-    const backup = await createEncryptedKeyBackup(ctx.user.id, passphrase);
-    await api(ctx.serverBase, "/org/key-backup", ctx.token, { method: "POST", body: backup });
+    const backup = await createEncryptedKeyBackup(ctx.user.userId, passphrase);
+
+    await apiJson(ctx.base, "/org/key-backup", { method: "POST", token: ctx.token, body: backup });
 
     ok("Backup saved ✅\n(Server stored ciphertext only.)");
     await loadStatus();
@@ -73,10 +61,10 @@ $("btnRestore").addEventListener("click", async () => {
     const passphrase = String($("pw1").value || "");
     if (!passphrase) throw new Error("Enter your passphrase (no confirm needed for restore).");
 
-    const out = await api(ctx.serverBase, "/org/key-backup", ctx.token);
-    await restoreKeyFromBackup(ctx.user.id, passphrase, out.keyBackup);
+    const out = await apiJson(ctx.base, "/org/key-backup", { token: ctx.token });
+    await restoreKeyFromBackup(ctx.user.userId, passphrase, out.keyBackup);
 
-    ok("Key restored ✅\nIf public key is missing, regenerate + re-register on next login.");
+    ok("Key restored ✅");
     await loadStatus();
   } catch (e) {
     err(e?.message || String(e));
@@ -89,7 +77,7 @@ $("btnDelete").addEventListener("click", async () => {
     const ctx = await loadStatus();
     if (!ctx) return;
 
-    await api(ctx.serverBase, "/org/key-backup", ctx.token, { method: "DELETE" });
+    await apiJson(ctx.base, "/org/key-backup", { method: "DELETE", token: ctx.token });
     ok("Backup deleted ✅");
     await loadStatus();
   } catch (e) {
