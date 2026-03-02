@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QuantumMail • Compose</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; max-width: 900px; }
+    .row { margin: 12px 0; }
+    label { display:block; font-weight: 600; margin-bottom: 6px; }
+    textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    textarea { min-height: 140px; }
+    .card { border: 1px solid #e5e5e5; border-radius: 14px; padding: 16px; margin: 12px 0; }
+    .inline { display:flex; gap: 12px; align-items:center; flex-wrap: wrap; }
+    .btn { padding: 10px 14px; border-radius: 12px; border: 1px solid #111; background: #111; color: #fff; cursor: pointer; }
+    .btn.secondary { background: #fff; color: #111; }
+    .muted { color: #666; font-size: 13px; }
+    code { background:#f6f6f6; padding:2px 6px; border-radius:8px; }
+    #status { margin-top: 8px; }
+    #result { word-break: break-all; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>QuantumMail • Compose</h1>
+  <p class="muted">
+    Encrypt message + attachments in-browser. Server stores ciphertext-only. Share a secure link.
+  </p>
+
+  <div class="card">
+    <div class="row">
+      <label for="message">Message</label>
+      <textarea id="message" placeholder="Type your message…"></textarea>
+    </div>
+
+    <div class="row">
+      <label>Mode</label>
+      <div class="inline">
+        <label class="inline"><input type="radio" name="mode" value="pqc" checked /> PQC (ML-KEM-768)</label>
+        <label class="inline"><input type="radio" name="mode" value="passphrase" /> Passphrase</label>
+      </div>
+      <div class="muted">PQC: encrypt to recipient public key. Passphrase: encrypt with PBKDF2-derived key.</div>
+    </div>
+
+    <div id="pqcFields" class="row">
+      <label for="recipientPk">Recipient Public Key (base64)</label>
+      <input id="recipientPk" type="text" placeholder="Paste recipient ML-KEM-768 public key (base64)" />
+      <div class="muted">Generate keys via <code>/portal/keygen.html</code>.</div>
+    </div>
+
+    <div id="pwFields" class="row" style="display:none;">
+      <label for="passphrase">Passphrase</label>
+      <input id="passphrase" type="password" placeholder="Enter a strong passphrase" />
+    </div>
+
+    <div class="row">
+      <label for="attachments">Attachments (MVP)</label>
+      <input id="attachments" type="file" multiple />
+      <div class="muted">MVP sends encrypted attachments inside JSON — keep files small (few MB total).</div>
+    </div>
+
+    <div class="row inline">
+      <button id="encryptBtn" class="btn">Encrypt & Generate Link</button>
+      <button id="copyBtn" class="btn secondary">Copy Link</button>
+      <button id="clearBtn" class="btn secondary">Clear</button>
+    </div>
+
+    <div class="row">
+      <div class="muted">Result</div>
+      <div id="result">—</div>
+      <div id="status" class="muted"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./compose.js"></script>
+</body>
+</html>

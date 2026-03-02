@@ -1,0 +1,75 @@
+Simple command can run all together:
+# 1) seed admin
+curl -s -X POST http://localhost:5173/dev/seed-admin \
+  -H "Content-Type: application/json" \
+  -d '{"orgId":"org_demo","username":"admin","password":"admin123"}' >/dev/null
+
+# 2) get admin token
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:5173/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"orgId":"org_demo","username":"admin","password":"admin123"}' | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).token")
+
+# 3) rotate key
+curl -s -X POST http://localhost:5173/admin/keys/rotate \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# 4) create member (ignore if already exists)
+curl -s -X POST http://localhost:5173/admin/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"alice123","role":"Member"}' || true
+
+
+
+
+Seed Admin:
+curl -s -X POST http://localhost:5173/dev/seed-admin \
+  -H "Content-Type: application/json" \
+  -d '{"orgId":"org_demo","username":"admin","password":"admin123"}'
+
+Login Admin: (from here we need to copy the ADMIN_TOKEN)
+curl -s -X POST http://localhost:5173/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"orgId":"org_demo","username":"admin","password":"admin123"}'
+
+Create Member:
+curl -s -X POST http://localhost:5173/admin/users \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"alice123","role":"Member"}'
+
+
+Rotate Key:
+curl -s -X POST http://localhost:5173/admin/keys/rotate \
+  -H "Authorization: Bearer <ADMIN_TOKEN>"
+
+
+
+
+--------------------------------------------------------
+
+(async () => {
+  const url = "https://quantummail-v2.onrender.com/bootstrap/superadmin";
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-QM-Bootstrap": "2uH8f9m1Qm0bJ7pG6cYdXHnQeVqLx3r5kP9zT1wS4aN8cR6vY0sD7hJ2mK5pL9xQ"
+    },
+    body: JSON.stringify({
+      username: "mihir",
+      password: "YourPasswordHere"
+    })
+  });
+
+  // IMPORTANT: don't call resp.json() blindly (502 returns HTML/empty)
+  const text = await resp.text();
+  console.log("status:", resp.status);
+  console.log("raw:", text);
+
+  try { console.log("json:", JSON.parse(text)); }
+  catch { console.log("not json"); }
+})();
+
+

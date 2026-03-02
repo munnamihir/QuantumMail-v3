@@ -1,0 +1,109 @@
+<!-- /portal/recover.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Account Recovery • QuantumMail</title>
+  <link rel="stylesheet" href="/portal/ui.css"/>
+  <style>
+    hr{ opacity:.2; margin:14px 0; border:none; border-top:1px solid var(--border); }
+    .tinyLink{
+      font-size:12px; color:var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      cursor:pointer;
+      display:inline-block;
+      margin-top: 8px;
+    }
+    .tinyLink:hover{ color:var(--text); }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Account Recovery</h1>
+          <div class="muted">Recover your username or reset your password</div>
+        </div>
+      </div>
+
+      <div class="right">
+        <a class="btn secondary" href="/portal/index.html">Back</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Step 1 — Identify Account</h2>
+
+      <label for="apiBase">API Base</label>
+      <input id="apiBase" placeholder="https://quantummail-v2.onrender.com"/>
+
+      <div class="row">
+        <div>
+          <label for="orgId">Org ID</label>
+          <input id="orgId" placeholder="org_123..."/>
+        </div>
+
+        <div>
+          <label for="email">Email</label>
+          <input id="email" placeholder="you@company.com" autocomplete="email"/>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="usernameBtn" class="secondary">Email my Username</button>
+        <button id="resetLinkBtn" class="primary">Send Password Reset Link</button>
+        <button id="saveBtn" class="secondary">Save</button>
+      </div>
+
+      <div id="msg1" class="ok"></div>
+      <div id="err1" class="err"></div>
+
+      <a id="openResetLink" class="tinyLink" href="#">Already have a reset link? Open reset step below</a>
+
+      <hr/>
+
+      <h2>Step 2 — Reset Password</h2>
+      <div class="help">
+        Paste the <strong>token</strong> from the reset link you received by email, then click <strong>Send Code</strong>.
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="token">Reset Token</label>
+          <input id="token" placeholder="token from reset link"/>
+        </div>
+
+        <div>
+          <label for="code">Verification Code</label>
+          <input id="code" placeholder="6-digit code"/>
+          <div class="help">You’ll receive this code by email after you click “Send Code”.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="newPw">New Password</label>
+          <input id="newPw" type="password" placeholder="min 12 characters" autocomplete="new-password"/>
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="actions" style="margin-top:0">
+            <button id="sendCodeBtn" class="secondary">Send Code</button>
+            <button id="completeBtn" class="primary">Reset Password</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="msg2" class="ok"></div>
+      <div id="err2" class="err"></div>
+    </div>
+  </div>
+
+  <script src="/portal/recover.js"></script>
+</body>
+</html>

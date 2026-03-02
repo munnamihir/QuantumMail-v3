@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail • Inbox</title>
+  <link rel="stylesheet" href="/portal/ui.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Inbox</h1>
+          <p class="muted" id="who">—</p>
+          <div class="orgLine" id="orgLine" style="display:none;">
+            <span class="badge" id="companyBadge" title="Company">
+              <span class="badgeDot"></span>
+              Company: <strong id="companyName">—</strong>
+            </span>
+          
+            <span class="badge" id="orgBadge" title="Organization">
+              <span class="badgeDot"></span>
+              Org: <strong id="orgName">—</strong>
+              <span class="muted" id="orgIdSmall" style="margin-left:6px;">—</span>
+            </span>
+          </div>
+        </div>
+      </div>
+<a class="btn" href="/portal/admin.html" id="btnAdminDash" style="display:none;">Admin Dashboard</a>
+<a class="btn" href="/portal/invites.html" id="btnInvites" style="display:none;">Generate Invite</a>
+      <div class="right">
+        <button id="btnProfile" class="secondary" type="button">Profile</button>
+        <button id="btnLogout" class="danger" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <div>
+          <h2 style="margin:0;">Encrypted messages for you</h2>
+          <div class="muted">Click Decrypt to open the secure decrypt page.</div>
+        </div>
+        <button id="btnRefresh" class="secondary" type="button">Refresh</button>
+      </div>
+
+      <div id="list" class="list"></div>
+
+      <div id="inboxErr" class="err"></div>
+    </main>
+
+    <!-- Profile Modal (top-level) -->
+    <div id="profileModal" class="modal" style="display:none;">
+      <div class="modalInner">
+        <div class="card">
+          <div class="modalHead">
+            <h2 style="margin:0;">Profile</h2>
+            <button id="btnCloseProfile" class="secondary" type="button">Close</button>
+          </div>
+
+          <div class="muted" id="profileMeta">—</div>
+
+          <div class="row" style="margin-top:12px;">
+            <div>
+              <label for="curPw">Current Password</label>
+              <div class="help">Verify it’s you.</div>
+              <input id="curPw" type="password"/>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="newPw">New Password</label>
+              <div class="help">Minimum 8 characters.</div>
+              <input id="newPw" type="password"/>
+            </div>
+            <div>
+              <label for="newPw2">Confirm New Password</label>
+              <div class="help">Must match exactly.</div>
+              <input id="newPw2" type="password"/>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="btnChangePw" class="primary" type="button">Change password</button>
+          </div>
+
+          <div id="pwOk" class="ok"></div>
+          <div id="pwErr" class="err"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/portal/inbox.js"></script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QuantumMail — PQC Keygen</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <img src="./assets/qubit.png" alt="Quantum" />
+      <div>QuantumMail <span class="badge">PQC keygen</span></div>
+    </div>
+    <div style="flex:1"></div>
+    <a class="btn secondary" href="./compose.html">Back to Compose</a>
+  </div>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="card">
+        <h2>Generate ML-KEM-768 keys</h2>
+        <p>Share your <strong>public key</strong> with senders. Keep your <strong>private seed</strong> secret.</p>
+
+        <div class="row" style="margin-top:12px">
+          <button id="genBtn" class="btn">Generate new keys</button>
+          <button id="loadBtn" class="btn secondary">Load saved keys</button>
+        </div>
+
+        <label>Public key (base64)</label>
+        <div id="pubOut" class="out">—</div>
+        <div class="row" style="margin-top:10px">
+          <button id="copyPub" class="btn secondary">Copy public key</button>
+          <span id="status" class="notice"></span>
+        </div>
+
+        <div class="hr"></div>
+
+        <label>Private key seed (base64) — keep secret</label>
+        <div id="seedOut" class="out">—</div>
+        <div class="row" style="margin-top:10px">
+          <button id="copySeed" class="btn secondary">Copy private seed</button>
+          <button id="saveSeed" class="btn secondary">Save seed in this browser</button>
+        </div>
+
+        <p class="notice"><strong>Reminder:</strong> this is a demo. In production you’d store keys in a hardware-backed keystore and add signature verification (ML-DSA).</p>
+      </div>
+
+      <div class="card">
+        <h2>What you share</h2>
+        <p><strong>Public key</strong> → paste into the sender’s compose page/extension.</p>
+        <p><strong>Private seed</strong> → paste into the decrypt page (or store privately).</p>
+        <div class="hr"></div>
+        <p class="notice">ML-KEM is standardized by NIST (FIPS 203) as part of post-quantum cryptography.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./keygen.js"></script>
+</body>
+</html>

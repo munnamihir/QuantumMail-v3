@@ -1,0 +1,115 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+  xsi:type="MailApp">
+
+  <Id>8c2b2ad1-5d73-4e26-a2c8-0f7b3a4b3b55</Id>
+  <Version>1.0.0</Version>
+  <ProviderName>QuantumMail</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="QuantumMail"/>
+  <Description DefaultValue="Encrypt email body + attachments into a secure QuantumMail link (recipient-bound)."/>
+
+  <!-- Optional icons (safe to leave even if paths 404) -->
+  <IconUrl DefaultValue="https://quantummail-v2.onrender.com/portal/assets/qm-icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://quantummail-v2.onrender.com/portal/assets/qm-icon-64.png"/>
+
+  <SupportUrl DefaultValue="https://quantummail-v2.onrender.com/portal/index.html"/>
+
+  <AppDomains>
+    <AppDomain>https://quantummail-v2.onrender.com</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.8"/>
+    </Sets>
+  </Requirements>
+
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://quantummail-v2.onrender.com/outlook-addin/src/taskpane.html"/>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+
+  <Permissions>ReadWriteItem</Permissions>
+
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit"/>
+  </Rule>
+
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.8">
+        <bt:Set Name="Mailbox"/>
+      </bt:Sets>
+    </Requirements>
+
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <FunctionFile resid="residCommandsUrl"/>
+
+          <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="grpQuantumMail">
+                <Label resid="residGroupLabel"/>
+                <Control xsi:type="Button" id="btnQuantumMailPane">
+                  <Label resid="residButtonLabel"/>
+                  <Supertip>
+                    <Title resid="residButtonLabel"/>
+                    <Description resid="residButtonDesc"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="residIcon16"/>
+                    <bt:Image size="32" resid="residIcon32"/>
+                    <bt:Image size="80" resid="residIcon80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="residTaskpaneUrl"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="residIcon16" DefaultValue="https://quantummail-v2.onrender.com/portal/assets/qm-icon-16.png"/>
+        <bt:Image id="residIcon32" DefaultValue="https://quantummail-v2.onrender.com/portal/assets/qm-icon-32.png"/>
+        <bt:Image id="residIcon80" DefaultValue="https://quantummail-v2.onrender.com/portal/assets/qm-icon-80.png"/>
+      </bt:Images>
+
+      <bt:Urls>
+        <bt:Url id="residTaskpaneUrl" DefaultValue="https://quantummail-v2.onrender.com/outlook-addin/src/taskpane.html"/>
+        <bt:Url id="residCommandsUrl" DefaultValue="https://quantummail-v2.onrender.com/outlook-addin/src/commands.html"/>
+      </bt:Urls>
+
+      <bt:ShortStrings>
+        <bt:String id="residGroupLabel" DefaultValue="QuantumMail"/>
+        <bt:String id="residButtonLabel" DefaultValue="Encrypt"/>
+      </bt:ShortStrings>
+
+      <bt:LongStrings>
+        <bt:String id="residButtonDesc" DefaultValue="Encrypt this email (body + selected attachments) into a secure QuantumMail link."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+
+</OfficeApp>

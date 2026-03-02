@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QuantumMail</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 14px; }
+    h2 { margin: 0 0 10px 0; font-size: 18px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+    label { display:block; font-size: 12px; color: #374151; margin: 10px 0 4px; }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 14px;
+    }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #111827;
+      color: #fff;
+      margin-top: 10px;
+    }
+    button.secondary { background: #374151; }
+    button.danger { background: #b91c1c; }
+    .row { display:flex; gap:10px; }
+    .row > div { flex:1; }
+    .muted { color:#6b7280; font-size: 12px; margin-top: 6px;}
+    .status { white-space: pre-wrap; font-size: 12px; color:#111827; background:#f9fafb; border:1px solid #e5e7eb; border-radius: 12px; padding: 10px; }
+    .pill { display:inline-block; padding: 3px 8px; border-radius: 999px; background:#eef2ff; color:#3730a3; font-size:12px; }
+    .list { max-height: 180px; overflow:auto; border:1px solid #e5e7eb; border-radius: 12px; padding: 8px; }
+    .user { display:flex; align-items:center; gap:8px; padding: 6px 4px; border-bottom: 1px dashed #eee; }
+    .user:last-child { border-bottom: none; }
+    .user small { color:#6b7280; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 10px; }
+    .topbar .right { display:flex; gap: 8px; align-items:center; }
+    .tiny { font-size: 12px; padding: 8px 10px; border-radius: 12px; width:auto; }
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <div>
+      <h2>QuantumMail</h2>
+      <div class="muted">Outlook Encrypt (body + attachments) → secure link</div>
+    </div>
+    <div class="right">
+      <span id="sessPill" class="pill" style="display:none;">Logged in</span>
+      <button id="btnLogout" class="tiny danger" style="display:none;">Logout</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Server Base</label>
+    <input id="serverBase" type="text" value="https://quantummail-v2.onrender.com" />
+
+    <div class="row">
+      <div>
+        <label>Org Id</label>
+        <input id="orgId" type="text" placeholder="org_abc123" />
+      </div>
+      <div>
+        <label>Username</label>
+        <input id="username" type="text" placeholder="mihir" />
+      </div>
+    </div>
+
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••••••" />
+    <button id="btnLogin">Login</button>
+    <div class="muted">This uses your existing org username/password flow (no changes).</div>
+  </div>
+
+  <div class="card">
+    <label>Recipients (only these users can decrypt)</label>
+    <input id="userSearch" type="text" placeholder="Search usernames..." />
+    <div class="muted" id="recipientsHint">Login to load org users.</div>
+    <div class="list" id="usersList" style="display:none;"></div>
+    <button id="btnReloadUsers" class="secondary" style="display:none;">Reload Users</button>
+  </div>
+
+  <div class="card">
+    <label>Attachments (MVP: pick files here)</label>
+    <input id="filePicker" type="file" multiple />
+    <div class="muted" id="filesHint">Selected: 0</div>
+
+    <button id="btnEncrypt">Encrypt & Insert Link</button>
+    <div class="muted">
+      Reads the current email body, encrypts it + selected files, uploads ciphertext, then inserts the link.
+    </div>
+  </div>
+
+  <div class="card">
+    <label>Status</label>
+    <div id="status" class="status">Ready.</div>
+  </div>
+
+  <script type="module" src="./taskpane.js"></script>
+</body>
+</html>

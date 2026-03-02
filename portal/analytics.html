@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail • Analytics</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0f1a;color:#e9eefc}
+    .container{max-width:1100px;margin:0 auto;padding:22px 16px}
+    .card{background:#12182a;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px;margin-top:12px}
+    .muted{color:#aab4d6;font-size:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    button,a{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#e9eefc;cursor:pointer;text-decoration:none;font-weight:800}
+    button.primary{border:none;background:linear-gradient(135deg,rgba(110,168,254,.95),rgba(43,213,118,.9));color:#07101f}
+    input{padding:10px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#e9eefc;outline:none}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:980px){.grid{grid-template-columns:1fr 1fr}}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .k{padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);min-width:190px}
+    .k b{font-size:18px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+    th{color:#aab4d6;font-size:11px;text-transform:uppercase;letter-spacing:.12em}
+    .err{color:#ff5c77;white-space:pre-wrap;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="row">
+      <a href="/portal/admin.html">← Back</a>
+      <h2 style="margin:0;">Analytics</h2>
+    </div>
+
+    <div class="card">
+      <div class="muted">Company-grade security + adoption analytics (no message content ever).</div>
+
+      <div class="row">
+        <label class="muted">Days</label>
+        <input id="days" value="30" style="width:100px;">
+
+        <label class="muted">Stale Key Days</label>
+        <input id="staleKeyDays" value="90" style="width:110px;">
+        <span class="muted">(flags keys older than <span id="staleKeyDaysLabel">90</span>d)</span>
+
+        <button id="btnRefresh" class="primary">Refresh</button>
+      </div>
+
+      <div id="err" class="err"></div>
+
+      <div class="kpi">
+        <div class="k"><div class="muted">Encrypted Messages</div><b id="kEncrypted">—</b></div>
+        <div class="k"><div class="muted">Decrypts</div><b id="kDecrypts">—</b></div>
+        <div class="k"><div class="muted">Denied Decrypts</div><b id="kDenied">—</b></div>
+        <div class="k"><div class="muted">Failed Logins</div><b id="kFailed">—</b></div>
+
+        <div class="k"><div class="muted">Active Seats (period)</div><b id="kActiveSeats">—</b></div>
+        <div class="k"><div class="muted">Active Users (7d)</div><b id="kWAU">—</b></div>
+        <div class="k"><div class="muted">Key Coverage</div><b id="kKeyCoverage">—</b></div>
+        <div class="k"><div class="muted">Decrypt Success Rate</div><b id="kDecryptRate">—</b></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="muted">Core Activity (daily trend)</div>
+        <canvas id="chartCore" height="140"></canvas>
+      </div>
+      <div class="card">
+        <div class="muted">Attachment Trend (bytes/day)</div>
+        <canvas id="chartAtt" height="140"></canvas>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="muted">Invite Hygiene</div>
+        <div class="kpi">
+          <div class="k"><div class="muted">Active Invites</div><b id="kInvActive">—</b></div>
+          <div class="k"><div class="muted">Used Invites</div><b id="kInvUsed">—</b></div>
+          <div class="k"><div class="muted">Expired Invites</div><b id="kInvExpired">—</b></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="muted">Key Health</div>
+        <div class="kpi">
+          <div class="k"><div class="muted">Users Missing Keys</div><b id="kMissingKeys">—</b></div>
+          <div class="k"><div class="muted">Stale Keys</div><b id="kStaleKeys">—</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="muted">Users Missing Keys</div>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Last Login</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyMissingKeys">
+          <tr><td colspan="4" class="muted">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="muted">Stale Keys</div>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Key Registered</th>
+            <th>Key Age (days)</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyStaleKeys">
+          <tr><td colspan="4" class="muted">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="muted">Most Active Users</div>
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Encrypts</th>
+            <th>Decrypts</th>
+            <th>Denied</th>
+            <th>Logins</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyUsers">
+          <tr><td colspan="6" class="muted">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script type="module" src="/portal/analytics.js"></script>
+  </div>
+</body>
+</html>

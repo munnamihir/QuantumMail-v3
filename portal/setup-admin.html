@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail • Admin Setup</title>
+  <style>
+    :root{
+      --bg:#0b0f1a;
+      --card:#12182a;
+      --text:#e9eefc;
+      --muted:#aab4d6;
+      --border:rgba(255,255,255,.12);
+      --good:#2bd576;
+      --bad:#ff5c77;
+      --accent:#6ee7ff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    .container{max-width:740px;margin:0 auto;padding:22px 16px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-top:12px}
+    .muted{color:var(--muted);font-size:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    input{
+      width:100%;
+      padding:10px 11px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      outline:none
+    }
+    button{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      cursor:pointer;
+      font-weight:800
+    }
+    button.primary{
+      border:none;
+      background:linear-gradient(135deg,rgba(110,168,254,.95),rgba(43,213,118,.9));
+      color:#07101f
+    }
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .err{color:var(--bad);white-space:pre-wrap;margin-top:10px}
+    .ok{color:var(--good);white-space:pre-wrap;margin-top:10px}
+
+    /* Verify modal (blur + car card) */
+    .backdrop{
+      position:fixed; inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      background:rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+    }
+    .modal{
+      width:min(640px,100%);
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+    }
+    .carCard{
+      margin-top:10px;
+      border:1px solid rgba(255,255,255,.10);
+      background:linear-gradient(135deg,rgba(110,231,255,.10),rgba(43,213,118,.08));
+      border-radius:14px;
+      padding:12px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .carIcon{
+      width:46px;height:46px;border-radius:14px;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.10);
+      font-size:22px;
+    }
+    .right{margin-left:auto}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 style="margin:0;">Admin Setup</h2>
+    <div class="muted">Verify your email first, then set your password to activate your admin account.</div>
+
+    <div class="card">
+      <div id="err" class="err"></div>
+      <div id="ok" class="ok"></div>
+
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Org ID</div>
+          <input id="orgId" readonly>
+        </div>
+        <div style="min-width:260px;flex:1">
+          <div class="muted">Email (from request)</div>
+          <input id="email" readonly>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end">
+        <button id="btnVerify">Verify</button>
+        <button id="btnShowActivate" class="primary" disabled>Activate</button>
+      </div>
+
+      <div id="activateBox" style="display:none;margin-top:12px">
+        <div class="muted">New Password (>= 12 chars)</div>
+        <input id="pw" type="password" autocomplete="new-password">
+
+        <div class="row" style="justify-content:flex-end;">
+          <button id="btnActivateNow" class="primary">Activate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verify Modal -->
+  <div class="backdrop" id="backdrop">
+    <div class="modal">
+      <div class="row">
+        <div style="font-weight:900">Verify your email</div>
+        <button id="btnClose" class="right">Close</button>
+      </div>
+
+      <div class="carCard">
+        <div class="carIcon">🚗</div>
+        <div>
+          <div style="font-weight:900">QuantumMail Verification</div>
+          <div class="muted">We’ll send a 6-digit code to confirm you own this inbox.</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1;min-width:260px">
+          <div class="muted">Email</div>
+          <input id="mEmail" readonly>
+        </div>
+        <div class="right">
+          <button id="btnSendCode">Send Code</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1;min-width:260px">
+          <div class="muted">Enter code</div>
+          <input id="mCode" inputmode="numeric" maxlength="6" placeholder="6-digit code">
+        </div>
+        <div class="right">
+          <button id="btnVerifyCode" class="primary">Verify</button>
+        </div>
+      </div>
+
+      <div id="mErr" class="err"></div>
+      <div id="mOk" class="ok"></div>
+    </div>
+  </div>
+
+  <!-- NEW: separate script file -->
+  <script src="/portal/setup-admin.js"></script>
+</body>
+</html>

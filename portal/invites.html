@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QuantumMail • Generate Invite</title>
+  <link rel="stylesheet" href="/portal/ui.css"/>
+  <style>
+    /* Slot machine visual */
+    .slotWrap{
+      display:flex; gap:10px; align-items:center; margin-top:12px;
+    }
+    .slot{
+      width:84px; height:72px; border-radius:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.06);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900; font-size:26px; letter-spacing:2px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    .controls{ display:flex; gap:10px; align-items:center; margin-top:12px; }
+    .recentList{ margin-top:14px; }
+    .invRow{ display:flex; justify-content:space-between; gap:10px; padding:10px; border-radius:10px; background: rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.04); margin-bottom:8px; }
+    .invMeta{ color:var(--muted); font-size:12px; }
+    .small{ font-size:12px; padding:6px 8px; border-radius:8px; }
+    .roleSelect{ width:140px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Invite Codes</h1>
+          <p class="muted">Create single-use join codes for your organization — one-time and optionally role-scoped.</p>
+        </div>
+      </div>
+
+      <div class="right">
+        <a class="btn" href="/portal/admin.html">Admin</a>
+        <a class="btn" href="/portal/inbox.html">Inbox</a>
+        <button id="btnLogout" class="danger">Logout</button>
+      </div>
+    </header>
+
+    <main class="card">
+      <div style="display:flex; gap:20px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div>
+          <label for="selRole">Invite role</label>
+          <select id="selRole" class="roleSelect">
+            <option value="Member">Member</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <div class="muted" style="margin-top:6px;">Role assigned when invite is used. Admin invites can create additional admins.</div>
+        </div>
+
+        <div>
+          <label for="expiresMinutes">Expires (minutes)</label>
+          <input id="expiresMinutes" type="number" min="5" max="10080" value="60" style="width:120px;"/>
+          <div class="muted" style="margin-top:6px;">How long until code expires (default 60 minutes).</div>
+        </div>
+
+        <!-- NEW: invite email -->
+        <div style="min-width:260px;flex:1">
+          <label for="invEmail">Invitee Email (optional)</label>
+          <input id="invEmail" type="email" autocomplete="email" placeholder="alice@company.com"/>
+          <div class="muted" style="margin-top:6px;">If set, you can restrict who can use this invite (server-side).</div>
+        </div>
+
+        <div>
+          <label>&nbsp;</label>
+          <div class="controls">
+            <button id="btnGenerate" class="primary">Generate Code</button>
+            <button id="btnRefresh" class="secondary">Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div class="slotWrap" id="slotWrap">
+          <div class="slot" id="slot1">---</div>
+          <div class="slot" id="slot2">---</div>
+          <div class="slot" id="slot3">---</div>
+          <div class="slot" id="slot4">---</div>
+          <div class="slot" id="slot5">---</div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <button id="btnCopy" class="secondary small" style="display:none;">Copy code</button>
+          <span id="generatedNote" class="muted" style="margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <section class="recentList">
+        <h3 style="margin: 12px 0 6px;">Recent invites</h3>
+        <div id="recentContainer" class="muted">Loading…</div>
+      </section>
+
+      <div id="invErr" class="err"></div>
+      <div id="invOk" class="ok"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/portal/invites.js"></script>
+</body>
+</html>

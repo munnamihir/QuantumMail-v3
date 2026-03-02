@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS qm_org_state (
+  org_id TEXT PRIMARY KEY,
+  state  JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

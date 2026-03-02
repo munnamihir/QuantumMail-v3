@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "QuantumMail (Envelope Encryption MVP)",
+  "version": "0.5",
+  "description": "Encrypt selected email text into a secure link. Envelope encryption with per-user wrapped keys.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.live.com/*",
+    "https://*.onrender.com/*"
+  ],
+  "action": {
+    "default_title": "QuantumMail",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.google.com/*",
+        "https://outlook.office.com/*",
+        "https://outlook.live.com/*",
+        "https://*.onrender.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

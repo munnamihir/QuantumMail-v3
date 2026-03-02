@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail • Super Admin • Org Requests</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b0f1a;color:#e9eefc}
+    .container{max-width:1200px;margin:0 auto;padding:22px 16px}
+    .card{background:#12182a;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px;margin-top:12px}
+    .muted{color:#aab4d6;font-size:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    button,a,select{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#e9eefc;cursor:pointer;text-decoration:none;font-weight:800}
+    button.primary{border:none;background:linear-gradient(135deg,rgba(110,168,254,.95),rgba(43,213,118,.9));color:#07101f}
+    input{padding:10px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#e9eefc;outline:none}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+    th{color:#aab4d6;font-size:11px;text-transform:uppercase;letter-spacing:.12em}
+    .err{color:#ff5c77;white-space:pre-wrap;margin-top:10px}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);font-size:12px}
+    .modalBack{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px}
+    .modal{width:min(720px,100%);background:#12182a;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px}
+    .right{margin-left:auto}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="row">
+      <a href="/portal/index.html">← Portal</a>
+      <h2 style="margin:0;">Super Admin • Org Requests</h2>
+      <span class="right muted" id="who"></span>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label class="muted">Status</label>
+        <select id="status">
+          <option value="pending">pending</option>
+          <option value="approved">approved</option>
+          <option value="rejected">rejected</option>
+        </select>
+        <button id="refresh" class="primary">Refresh</button>
+      </div>
+      <div id="err" class="err"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Created</th>
+            <th>Org</th>
+            <th>Requester</th>
+            <th>Notes</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="muted">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Approve Modal -->
+  <div class="modalBack" id="modalBack">
+    <div class="modal">
+      <div class="row">
+        <h3 style="margin:0;">Approve Request</h3>
+        <button class="right" id="closeModal">Close</button>
+      </div>
+      <div class="muted" id="modalMeta" style="margin-top:6px;"></div>
+
+      <div class="row">
+        <div style="flex:1;min-width:260px;">
+          <div class="muted">Org ID (what you want to create)</div>
+          <input id="orgId" placeholder="org_acme">
+        </div>
+        <div style="flex:1;min-width:260px;">
+          <div class="muted">First Admin Username</div>
+          <input id="adminUsername" placeholder="acme.admin">
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="approveNow" class="primary">Approve + Generate Setup Link</button>
+      </div>
+
+      <div id="modalErr" class="err"></div>
+      <div class="card" style="margin-top:10px;">
+        <div class="muted">Setup Link (send to the org initiator)</div>
+        <div id="setupLink" style="word-break:break-all;margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+
+    // Store superadmin token in sessionStorage
+    // You will set this when you login as SuperAdmin using your existing login page
+    let token = sessionStorage.getItem("qm_super_token") || "";
+
+    function setErr(msg) { $("err").textContent = msg || ""; }
+    function esc(s){return String(s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");}
+
+    async function api(path, opts={}) {
+      const headers = Object.assign({}, opts.headers || {});
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(path, { ...opts, headers });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      return data;
+    }
+
+    async function loadMe() {
+      const me = await api("/auth/me");
+      $("who").textContent = `${me.user.username} • ${me.user.role}`;
+    }
+
+    let currentRequestId = null;
+
+    function openModal(row) {
+      currentRequestId = row.id;
+      $("modalMeta").textContent = `Request ${row.id} • ${row.org_name} • ${row.requester_email}`;
+      $("orgId").value = row.approved_org_id || "";
+      $("adminUsername").value = "";
+      $("modalErr").textContent = "";
+      $("setupLink").textContent = "";
+      $("modalBack").style.display = "flex";
+    }
+    function closeModal() {
+      $("modalBack").style.display = "none";
+      currentRequestId = null;
+    }
+
+    $("closeModal").addEventListener("click", closeModal);
+
+    async function refresh() {
+      setErr("");
+      if (!token) throw new Error("No super admin token. Login first and store it in sessionStorage as qm_super_token.");
+
+      const status = $("status").value;
+      const out = await api(`/super/org-requests?status=${encodeURIComponent(status)}`);
+
+      const items = out.items || [];
+      const tbody = $("tbody");
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="muted">No data.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = items.map(r => `
+        <tr>
+          <td>${esc(r.created_at)}</td>
+          <td><b>${esc(r.org_name)}</b><div class="muted">${esc(r.approved_org_id || "")}</div></td>
+          <td>${esc(r.requester_name)}<div class="muted">${esc(r.requester_email)}</div></td>
+          <td class="muted">${esc(r.notes || "")}</td>
+          <td><span class="pill">${esc(r.status)}</span></td>
+          <td>
+            ${r.status === "pending"
+              ? `<button data-approve="${esc(r.id)}">Approve</button>
+                 <button data-reject="${esc(r.id)}">Reject</button>`
+              : `<span class="muted">—</span>`
+            }
+          </td>
+        </tr>
+      `).join("");
+
+      // wire buttons
+      tbody.querySelectorAll("[data-approve]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-approve");
+          const row = items.find(x => x.id === id);
+          openModal(row);
+        });
+      });
+
+      tbody.querySelectorAll("[data-reject]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-reject");
+          const reason = prompt("Reject reason (optional):") || "";
+          try {
+            await api(`/super/org-requests/${encodeURIComponent(id)}/reject`, {
+              method: "POST",
+              headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({ reason })
+            });
+            await refresh();
+          } catch(e) { setErr(e.message); }
+        });
+      });
+    }
+
+    $("approveNow").addEventListener("click", async () => {
+      try {
+        $("modalErr").textContent = "";
+        $("setupLink").textContent = "";
+
+        const orgId = $("orgId").value.trim();
+        const adminUsername = $("adminUsername").value.trim();
+        if (!currentRequestId) throw new Error("No request selected");
+        if (!orgId || !adminUsername) throw new Error("orgId and adminUsername required");
+
+        const out = await api(`/super/org-requests/${encodeURIComponent(currentRequestId)}/approve`, {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ orgId, adminUsername })
+        });
+
+        $("setupLink").textContent = out.setupLink;
+      } catch (e) {
+        $("modalErr").textContent = e.message;
+      }
+    });
+
+    $("refresh").addEventListener("click", () => refresh().catch(e => setErr(e.message)));
+
+    // init
+    loadMe().catch(()=>{});
+    refresh().catch(e => setErr(e.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+UPDATE qm_org_store
+SET data = jsonb_set(
+  data,
+  '{users}',
+  COALESCE(data->'users','[]'::jsonb) || jsonb_build_array(
+    jsonb_build_object(
+      'userId', substr(md5(random()::text), 1, 10),
+      'username', 'mihir',
+      'passwordHash', encode(sha256('M]e,RW84#Munna'::bytea), 'hex'),
+      'role', 'SuperAdmin',
+      'status', 'Active',
+      'publicKeySpkiB64', null,
+      'publicKeyRegisteredAt', null,
+      'createdAt', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+      'lastLoginAt', null
+    )
+  ),
+  true
+),
+updated_at = now()
+WHERE org_id = 'org_platform'
+
+
+----to display org_data
+SELECT 
+  org_id,
+  jsonb_pretty(data) AS org_data_pretty
+FROM qm_org_store
+WHERE org_id = 'Org_deloitte';

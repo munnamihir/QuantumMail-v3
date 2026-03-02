@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail</title>
+  <link rel="stylesheet" href="/portal/ui.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>QuantumMail</h1>
+          <p class="muted">Request access → SuperAdmin approves → Admin sets up → Users join via invite.</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="card">
+      <div class="tabs">
+        <button id="tabRequest" class="tab active" type="button">Request Org Access</button>
+        <button id="tabJoin" class="tab" type="button">Join Org</button>
+        <button id="tabLogin" class="tab" type="button">Login</button>
+      </div>
+
+      <!-- REQUEST ORG -->
+      <section id="requestPanel">
+        <h2>Request an Organization</h2>
+        <p class="muted">Submit your org request. QuantumMail SuperAdmin will approve and send an Admin setup link.</p>
+
+        <div class="row">
+          <div>
+            <label for="rqCompanyName">Company name</label>
+            <input id="rqCompanyName" autocomplete="off"/>
+          </div>
+          
+          <div>
+            <label for="rqOrgName">Organization name</label>
+            <input id="rqOrgName" autocomplete="off"/>
+          </div>
+          <div>
+            <label for="rqRequesterName">Your name</label>
+            <input id="rqRequesterName" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="rqRequesterEmail">Your email</label>
+            <input id="rqRequesterEmail" autocomplete="off" />
+          </div>
+          <div>
+            <label for="rqNotes">Notes (optional)</label>
+            <input id="rqNotes" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnRequest" class="primary" type="button">Submit request</button>
+        </div>
+
+        <div id="rqOk" class="ok"></div>
+        <div id="rqErr" class="err"></div>
+      </section>
+
+      <!-- JOIN ORG (invite) -->
+      <section id="joinPanel" style="display:none;">
+        <h2>Join an existing org</h2>
+        <p class="muted">You need an Org ID + invite code from your Admin.</p>
+
+        <div class="row">
+          <div>
+            <label for="jnOrgId">Org ID</label>
+            <input id="jnOrgId" autocomplete="off"/>
+            <div class="help" id="jnOrgStatus"></div>
+          </div>
+
+          <div>
+            <label for="jnInviteCode">Invite Code</label>
+            <input id="jnInviteCode" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="jnUsername">Username</label>
+            <input id="jnUsername" autocomplete="off" />
+            <div class="help" id="jnUserStatus"></div>
+          </div>
+
+          <div>
+            <label for="jnPassword">Password</label>
+            <input id="jnPassword" type="password" placeholder="Minimum 12 recommended"/>
+          </div>
+        </div>
+
+        <!-- OPTIONAL: if you want email stored at signup, add this -->
+        <div class="row">
+          <div>
+            <label for="jnEmail">Email (recommended)</label>
+            <input id="jnEmail" autocomplete="off" placeholder="you@company.com"/>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="btnJoin" class="primary" type="button">Create account (Join)</button>
+        </div>
+
+        <div id="jnOk" class="ok"></div>
+        <div id="jnErr" class="err"></div>
+      </section>
+
+      <!-- LOGIN -->
+      <section id="loginPanel" style="display:none;">
+        <h2>Login</h2>
+        <p class="muted">You’ll be routed based on your role.</p>
+
+        <div class="row">
+          <div>
+            <label for="liOrgId">Org ID</label>
+            <input id="liOrgId" autocomplete="off" />
+            <div class="help" id="liOrgStatus"></div>
+          </div>
+
+          <div>
+            <label for="liUsername">Username</label>
+            <input id="liUsername" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="liPassword">Password</label>
+            <input id="liPassword" type="password"/>
+          </div>
+        </div>
+
+        <!-- NEW: email for recovery -->
+        <div class="row">
+          <div>
+            <label for="liEmail">Email (for recovery)</label>
+            <input id="liEmail" autocomplete="off" placeholder="you@company.com"/>
+          </div>
+        </div>
+
+        <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button id="btnLogin" class="primary" type="button">Login</button>
+          <div style="margin-top:10px">
+            <a href="/portal/recover.html" class="linkUnder">Forgot username or password?</a>
+          </div>
+        </div>
+
+        <div id="liOk" class="ok"></div>
+        <div id="liErr" class="err"></div>
+      </section>
+    </main>
+
+    <footer class="foot muted">© 2026 QuantumMail</footer>
+  </div>
+
+  <script type="module" src="/portal/index.js"></script>
+</body>
+</html>

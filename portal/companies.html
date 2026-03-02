@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QuantumMail • Companies</title>
+  <link rel="stylesheet" href="/portal/ui.css" />
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Companies Overview</h1>
+          <div class="muted" id="who">—</div>
+
+          <div class="orgLine">
+            <span class="badge">
+              <span class="badgeDot"></span>
+              <strong>Status:</strong> Companies
+            </span>
+            <span class="badge">
+              <span class="badgeDot"></span>
+              <strong>Guard:</strong> <span id="guardMsg">—</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <button class="btn secondary" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <a class="btn tab" href="/portal/.qm/super.html">Org Requests</a>
+      <a class="btn tab active" href="/portal/companies.html">Companies</a>
+    </div>
+
+    <div class="card" id="mainCard">
+
+      <div class="row" style="margin-top:0">
+        <div>
+          <label>API Base (optional)</label>
+          <input id="apiBase" placeholder="https://quantummail-v2.onrender.com (or blank for same-origin)" />
+          <div class="help">Leave empty when running under the same Render URL.</div>
+        </div>
+
+        <div>
+          <label>SuperAdmin Token</label>
+          <input id="token" placeholder="Paste Bearer token here" />
+          <div class="help">Shared across Super pages.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="saveTokenBtn" type="button">Save</button>
+        <button class="btn" id="loadTokenBtn" type="button">Load</button>
+        <button class="btn primary" id="reloadBtn" type="button">Reload</button>
+      </div>
+
+      <div class="muted" id="msg" style="margin-top:10px"></div>
+
+      <div class="list" id="companiesWrap">
+        <div class="item">
+          <div class="muted">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="modal" style="display:none">
+      <div class="modalInner">
+        <div class="card">
+          <div class="itemTitle">Notice</div>
+          <div class="muted" id="toastText" style="margin-top:6px">—</div>
+          <div class="actions">
+            <button class="btn primary" id="toastCloseBtn" type="button">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot muted">QuantumMail • Super Admin Console</div>
+  </div>
+
+  <script src="/portal/companies.js"></script>
+</body>
+</html>

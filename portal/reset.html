@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>QuantumMail • Reset Password</title>
+  <link rel="stylesheet" href="/portal/ui.css"/>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Reset Password</h1>
+          <p class="muted">Open link → Send code → Verify code → Set new password.</p>
+        </div>
+      </div>
+      <div class="right">
+        <a class="btn" href="/portal/index.html?tab=login">Back to Login</a>
+      </div>
+    </header>
+
+    <main class="card">
+      <div class="muted">
+        Step 1: Click <b>Send Code</b> (we email a 6-digit code).<br/>
+        Step 2: Enter code + your new password.
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <div>
+          <label>Org ID</label>
+          <input id="orgId" readonly />
+        </div>
+        <div>
+          <label>Reset Token</label>
+          <input id="token" readonly />
+        </div>
+      </div>
+
+      <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btnSendCode" class="primary" type="button">Send Code</button>
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <div>
+          <label>Verification Code (6 digits)</label>
+          <input id="code" inputmode="numeric" maxlength="6" placeholder="123456"/>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>New Password (>= 12 chars)</label>
+          <input id="newPassword" type="password"/>
+        </div>
+        <div>
+          <label>Confirm New Password</label>
+          <input id="newPassword2" type="password"/>
+        </div>
+      </div>
+
+      <div class="actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btnReset" class="primary" type="button">Verify & Update Password</button>
+      </div>
+
+      <div id="ok" class="ok"></div>
+      <div id="err" class="err"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/portal/reset.js"></script>
+</body>
+</html>
