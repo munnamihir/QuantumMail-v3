@@ -407,6 +407,51 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
 
+      // NEW: crypto login (nonce sign) + decrypt (no password required)
+      if (msg?.type === "QM_CHALLENGE_LOGIN_AND_DECRYPT") {
+        const { msgId, serverBase, orgId, username } = msg;
+      
+        const base = normalizeBase(serverBase);
+      
+        // 1) get challenge
+        const ch = await apiJson(base, "/auth/challenge", {
+          method: "POST",
+          body: { orgId, username }
+        });
+      
+        // 2) sign nonce using device key
+        const s = await getSession();
+        let userId = s?.user?.userId;
+        if (!userId) {
+          // user might not be stored yet; we can still sign using username-only?
+          // MVP: require that the user has logged in once before and has a stored key.
+          throw new Error("No extension session. Login once (password) so your key is created/registered.");
+        }
+      
+        const kp = await getOrCreateRsaKeypair(userId);
+        const signatureB64 = await signNonceB64(kp.privateKeyPSS, ch.nonceB64);
+      
+        // 3) verify challenge -> token
+        const ver = await apiJson(base, "/auth/challenge/verify", {
+          method: "POST",
+          body: { orgId, username, challengeId: ch.challengeId, signatureB64 }
+        });
+      
+        const token = ver.token;
+        const user = ver.user;
+        await setSession({ serverBase: base, token, user });
+      
+        // 4) decrypt message payload
+        const payload = await apiJson(base, `/api/messages/${encodeURIComponent(msgId)}`, { token });
+        if (!payload?.wrappedDek) throw new Error("Missing wrappedDek in payload.");
+      
+        const rawDek = await rsaUnwrapDek(kp.privateKeyOAEP, payload.wrappedDek);
+        const plaintext = await aesDecrypt(payload.iv, payload.ciphertext, payload.aad || "web", rawDek);
+      
+        sendResponse({ ok: true, plaintext, attachments: payload.attachments || [] });
+        return;
+      }
+            
       sendResponse({ ok: false, error: "Unknown message type" });
     } catch (e) {
       console.error("QuantumMail background error:", e);
