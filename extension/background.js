@@ -1,4 +1,8 @@
-// extension/background.js (UPDATED)
+// extension/background.js (FULL UPDATED)
+
+// IMPORTANT:
+// - Do NOT redeclare apiJson or rsaUnwrapDek here.
+// - Use qm.js as the single source of truth for crypto + API helpers.
 
 import {
   normalizeBase,
@@ -6,66 +10,16 @@ import {
   getSession,
   setSession,
   getOrCreateRsaKeypair,
-  signNonceB64,
+  ensureKeypairAndRegister,
+  aesEncrypt,
+  aesDecrypt,
+  importPublicSpkiB64,
+  rsaWrapDek,
   rsaUnwrapDek,
-  aesDecrypt
+  signNonceB64,
+  bytesToB64Url,
+  b64UrlToBytes
 } from "./qm.js";
-
-/* =========================
-   Robust helpers
-========================= */
-
-function shortenText(s, n = 280) {
-  const str = String(s || "");
-  return str.length <= n ? str : str.slice(0, n) + "…";
-}
-
-async function readResponseSmart(res) {
-  const ct = String(res.headers.get("content-type") || "").toLowerCase();
-  const raw = await res.text().catch(() => "");
-  if (ct.includes("application/json")) {
-    try {
-      return { kind: "json", data: JSON.parse(raw || "{}"), raw };
-    } catch {
-      return { kind: "text", data: raw, raw };
-    }
-  }
-  return { kind: "text", data: raw, raw };
-}
-
-async function apiJson(serverBase, path, { method = "GET", token = "", body = null } = {}) {
-  const base = normalizeBase(serverBase);
-  const url = `${base}${path}`;
-
-  const headers = { Accept: "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body) headers["Content-Type"] = "application/json";
-
-  let res;
-  try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined
-    });
-  } catch (e) {
-    throw new Error(`[NET] ${method} ${path} -> ${e?.message || e}`);
-  }
-
-  const parsed = await readResponseSmart(res);
-
-  if (!res.ok) {
-    const msg =
-      (parsed.kind === "json" && (parsed.data?.error || parsed.data?.message)) ||
-      shortenText(parsed.raw || parsed.data || "", 320) ||
-      `Request failed (${res.status})`;
-
-    throw new Error(`[HTTP ${res.status}] ${method} ${path} -> ${msg}`);
-  }
-
-  if (parsed.kind === "json") return parsed.data;
-  return { ok: true, raw: parsed.data };
-}
 
 /* =========================
    Chrome tab messaging
@@ -83,7 +37,7 @@ async function sendToTab(tabId, msg, timeoutMs = 1500) {
     const t = setTimeout(() => {
       if (done) return;
       done = true;
-      reject(new Error("Timed out talking to content script. Refresh the Gmail/Outlook tab and try again."));
+      reject(new Error("Timed out talking to content script. Refresh the tab and try again."));
     }, timeoutMs);
 
     chrome.tabs.sendMessage(tabId, msg, (resp) => {
@@ -98,6 +52,22 @@ async function sendToTab(tabId, msg, timeoutMs = 1500) {
   });
 }
 
+async function assertContentScriptAvailable(tabId) {
+  try {
+    const r = await sendToTab(tabId, { type: "QM_PING" }, 900);
+    if (!r?.ok) throw new Error("Ping failed");
+  } catch (e) {
+    throw new Error(
+      `Content script not available in this tab.\n` +
+        `Fix:\n` +
+        `1) Open Gmail/Outlook compose window\n` +
+        `2) Refresh the tab (Cmd/Ctrl+R)\n` +
+        `3) Re-open the popup and try again\n\n` +
+        `Details: ${e.message}`
+    );
+  }
+}
+
 function aadFromTabUrl(tabUrl) {
   const u = String(tabUrl || "").toLowerCase();
   if (u.includes("mail.google.com")) return "gmail";
@@ -107,22 +77,7 @@ function aadFromTabUrl(tabUrl) {
 }
 
 /* =========================
-   Base64URL (safe for larger data)
-========================= */
-
-function bytesToB64Url(bytes) {
-  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
-  let binary = "";
-  const chunkSize = 0x2000;
-  for (let i = 0; i < u8.length; i += chunkSize) {
-    binary += String.fromCharCode(...u8.subarray(i, i + chunkSize));
-  }
-  const b64 = btoa(binary);
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-/* =========================
-   Attachment crypto
+   Attachment crypto (AES-GCM using same rawDek)
 ========================= */
 
 function attachmentToU8(a) {
@@ -148,12 +103,6 @@ async function decryptBytesWithRawDek(rawDekBytes, ivB64Url, ctB64Url) {
   return new Uint8Array(pt);
 }
 
-async function rsaUnwrapDek(privateKey, wrappedDekB64Url) {
-  const wrappedBytes = b64UrlToBytes(wrappedDekB64Url);
-  const raw = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, privateKey, wrappedBytes);
-  return new Uint8Array(raw);
-}
-
 /* =========================
    Session + login
 ========================= */
@@ -170,7 +119,7 @@ async function loginAndStoreSession({ serverBase, orgId, username, password }) {
   const user = out?.user || null;
   if (!token || !user?.userId) throw new Error("Login failed: missing token/user.");
 
-  // ✅ register per-user key (OperationError fix)
+  // Register device public key with server (your existing idea)
   await ensureKeypairAndRegister(base, token, user.userId);
 
   await setSession({ serverBase: base, token, user });
@@ -188,10 +137,9 @@ async function listOrgUsersForAutocomplete() {
   const usersOut = await apiJson(s.serverBase, "/org/users", { token: s.token });
   const users = Array.isArray(usersOut?.users) ? usersOut.users : [];
 
-  // Keep only what popup needs
   return users
-    .filter(u => u?.userId && u?.username)
-    .map(u => ({
+    .filter((u) => u?.userId && u?.username)
+    .map((u) => ({
       userId: u.userId,
       username: u.username,
       hasKey: !!u.publicKeySpkiB64
@@ -203,29 +151,13 @@ async function listOrgUsersForAutocomplete() {
    Encrypt selection (optionally recipients)
 ========================= */
 
-async function assertContentScriptAvailable(tabId) {
-  try {
-    const r = await sendToTab(tabId, { type: "QM_PING" }, 900);
-    if (!r?.ok) throw new Error("Ping failed");
-  } catch (e) {
-    throw new Error(
-      `Content script not available in this tab.\n` +
-        `Fix:\n` +
-        `1) Open Gmail/Outlook compose window\n` +
-        `2) Refresh the tab (Cmd/Ctrl+R)\n` +
-        `3) Re-open the popup and try again\n\n` +
-        `Details: ${e.message}`
-    );
-  }
-}
-
 async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = [] } = {}) {
   const s = await getSession();
   if (!s?.token || !s?.serverBase) throw new Error("Please login first in the popup.");
 
   const list = Array.isArray(attachments) ? attachments : [];
   const totalBytes = list.reduce((sum, a) => sum + Number(a?.size || 0), 0);
-  const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+  const MAX_TOTAL_BYTES = 8 * 1024 * 1024; // 8MB MVP limit
   if (totalBytes > MAX_TOTAL_BYTES) {
     throw new Error(`Attachments too large for MVP (${Math.round(totalBytes / 1024 / 1024)}MB). Limit is 8MB.`);
   }
@@ -240,6 +172,7 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
   const plaintext = String(sel?.text || "").trim();
   if (!plaintext) throw new Error("Select text in the email body first (compose body).");
 
+  // Encrypt text
   const { ctB64Url, ivB64Url, rawDek } = await aesEncrypt(plaintext, aad);
 
   // Encrypt attachments with SAME rawDek
@@ -258,14 +191,15 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
     });
   }
 
-  // Fetch org users once
+  // Fetch org users
   const usersOut = await apiJson(s.serverBase, "/org/users", { token: s.token });
   const users = Array.isArray(usersOut?.users) ? usersOut.users : [];
 
   // If recipients chosen -> restrict wrapping set
-  const restrict = Array.isArray(recipientUserIds) && recipientUserIds.length
-    ? new Set(recipientUserIds.map(String))
-    : null;
+  const restrict =
+    Array.isArray(recipientUserIds) && recipientUserIds.length
+      ? new Set(recipientUserIds.map(String))
+      : null;
 
   const wrappedKeys = {};
   let wrappedCount = 0;
@@ -287,8 +221,8 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
     }
 
     const pub = await importPublicSpkiB64(u.publicKeySpkiB64);
-    const wrappedDek = await rsaWrapDek(pub, rawDek);
-    wrappedKeys[uid] = wrappedDek;
+    const wrappedDekB64Url = await rsaWrapDek(pub, rawDek);
+    wrappedKeys[uid] = wrappedDekB64Url;
     wrappedCount++;
   }
 
@@ -300,6 +234,7 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
     );
   }
 
+  // Create message on server
   const msgOut = await apiJson(s.serverBase, "/api/messages", {
     method: "POST",
     token: s.token,
@@ -315,6 +250,7 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
   const url = msgOut?.url;
   if (!url) throw new Error("Server did not return message URL.");
 
+  // Replace selection with link
   const rep = await sendToTab(tabId, { type: "QM_REPLACE_SELECTION_WITH_LINK", url });
   if (!rep?.ok) throw new Error(rep?.error || "Failed to insert link into email.");
 
@@ -328,7 +264,7 @@ async function encryptSelectionOrgWide({ attachments = [], recipientUserIds = []
 }
 
 /* =========================
-   Login + decrypt message
+   Login + decrypt message (password flow)
 ========================= */
 
 async function loginAndDecrypt({ msgId, serverBase, orgId, username, password }) {
@@ -339,24 +275,25 @@ async function loginAndDecrypt({ msgId, serverBase, orgId, username, password })
 
   const kp = await getOrCreateRsaKeypair(user.userId);
 
-  let rawDek;
+  let rawDekBytes;
   try {
-    rawDek = await rsaUnwrapDek(kp.privateKey, payload.wrappedDek);
+    rawDekBytes = await rsaUnwrapDek(kp.privateKeyOAEP, payload.wrappedDek);
   } catch {
     throw new Error(
       "Decrypt failed: your device key does not match the key used when this link was created.\n" +
-      "This happens after reinstall/re-key/cleared storage.\n" +
-      "Ask the sender to re-encrypt and send a fresh link."
+        "This happens after reinstall/re-key/cleared storage.\n" +
+        "Ask the sender to re-encrypt and send a fresh link."
     );
   }
 
-  const plaintext = await aesDecrypt(payload.iv, payload.ciphertext, payload.aad || "web", rawDek);
+  const plaintext = await aesDecrypt(payload.iv, payload.ciphertext, payload.aad || "web", rawDekBytes);
 
+  // Decrypt attachments
   const outAttachments = [];
   const encAtts = Array.isArray(payload.attachments) ? payload.attachments : [];
   for (const a of encAtts) {
     if (!a?.iv || !a?.ciphertext) continue;
-    const ptBytes = await decryptBytesWithRawDek(rawDek, a.iv, a.ciphertext);
+    const ptBytes = await decryptBytesWithRawDek(rawDekBytes, a.iv, a.ciphertext);
     outAttachments.push({
       name: a.name || "attachment",
       mimeType: a.mimeType || "application/octet-stream",
@@ -366,6 +303,49 @@ async function loginAndDecrypt({ msgId, serverBase, orgId, username, password })
   }
 
   return { plaintext, attachments: outAttachments };
+}
+
+/* =========================
+   Crypto-login (nonce sign) + decrypt (no password)
+========================= */
+
+async function challengeLoginAndDecrypt({ msgId, serverBase, orgId, username }) {
+  const base = normalizeBase(serverBase);
+
+  // 1) get challenge
+  const ch = await apiJson(base, "/auth/challenge", {
+    method: "POST",
+    body: { orgId, username }
+  });
+
+  // 2) sign nonce using device key
+  const s = await getSession();
+  const userId = s?.user?.userId;
+  if (!userId) {
+    throw new Error("No extension session. Login once (password) so your key is created/registered.");
+  }
+
+  const kp = await getOrCreateRsaKeypair(userId);
+  const signatureB64 = await signNonceB64(kp.privateKeyPSS, ch.nonceB64);
+
+  // 3) verify challenge -> token
+  const ver = await apiJson(base, "/auth/challenge/verify", {
+    method: "POST",
+    body: { orgId, username, challengeId: ch.challengeId, signatureB64 }
+  });
+
+  const token = ver.token;
+  const user = ver.user;
+  await setSession({ serverBase: base, token, user });
+
+  // 4) decrypt message payload
+  const payload = await apiJson(base, `/api/messages/${encodeURIComponent(msgId)}`, { token });
+  if (!payload?.wrappedDek) throw new Error("Missing wrappedDek in payload.");
+
+  const rawDekBytes = await rsaUnwrapDek(kp.privateKeyOAEP, payload.wrappedDek);
+  const plaintext = await aesDecrypt(payload.iv, payload.ciphertext, payload.aad || "web", rawDekBytes);
+
+  return { plaintext, attachments: payload.attachments || [] };
 }
 
 /* =========================
@@ -382,7 +362,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
 
-      // ✅ NEW: recipients list for autocomplete
       if (msg?.type === "QM_RECIPIENTS") {
         const users = await listOrgUsersForAutocomplete();
         sendResponse({ ok: true, users });
@@ -405,51 +384,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
 
-      // NEW: crypto login (nonce sign) + decrypt (no password required)
       if (msg?.type === "QM_CHALLENGE_LOGIN_AND_DECRYPT") {
         const { msgId, serverBase, orgId, username } = msg;
-      
-        const base = normalizeBase(serverBase);
-      
-        // 1) get challenge
-        const ch = await apiJson(base, "/auth/challenge", {
-          method: "POST",
-          body: { orgId, username }
-        });
-      
-        // 2) sign nonce using device key
-        const s = await getSession();
-        let userId = s?.user?.userId;
-        if (!userId) {
-          // user might not be stored yet; we can still sign using username-only?
-          // MVP: require that the user has logged in once before and has a stored key.
-          throw new Error("No extension session. Login once (password) so your key is created/registered.");
-        }
-      
-        const kp = await getOrCreateRsaKeypair(userId);
-        const signatureB64 = await signNonceB64(kp.privateKeyPSS, ch.nonceB64);
-      
-        // 3) verify challenge -> token
-        const ver = await apiJson(base, "/auth/challenge/verify", {
-          method: "POST",
-          body: { orgId, username, challengeId: ch.challengeId, signatureB64 }
-        });
-      
-        const token = ver.token;
-        const user = ver.user;
-        await setSession({ serverBase: base, token, user });
-      
-        // 4) decrypt message payload
-        const payload = await apiJson(base, `/api/messages/${encodeURIComponent(msgId)}`, { token });
-        if (!payload?.wrappedDek) throw new Error("Missing wrappedDek in payload.");
-      
-        const rawDek = await rsaUnwrapDek(kp.privateKeyOAEP, payload.wrappedDek);
-        const plaintext = await aesDecrypt(payload.iv, payload.ciphertext, payload.aad || "web", rawDek);
-      
-        sendResponse({ ok: true, plaintext, attachments: payload.attachments || [] });
+        const out = await challengeLoginAndDecrypt({ msgId, serverBase, orgId, username });
+        sendResponse({ ok: true, plaintext: out.plaintext, attachments: out.attachments });
         return;
       }
-            
+
       sendResponse({ ok: false, error: "Unknown message type" });
     } catch (e) {
       console.error("QuantumMail background error:", e);
